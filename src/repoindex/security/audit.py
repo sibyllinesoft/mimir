@@ -248,16 +248,16 @@ class AuditLogger:
             self.flush_buffer()
 
         # Log to standard logger based on severity
-        log_data = event.to_dict()
-
+        log_message = f"Security event: {event.event_type.value} - {event.message}"
+        
         if event.severity == SecurityEventSeverity.CRITICAL:
-            logger.critical("Security event", **log_data)
+            logger.critical(log_message)
         elif event.severity == SecurityEventSeverity.HIGH:
-            logger.error("Security event", **log_data)
+            logger.error(log_message)
         elif event.severity == SecurityEventSeverity.MEDIUM:
-            logger.warning("Security event", **log_data)
+            logger.warning(log_message)
         else:
-            logger.info("Security event", **log_data)
+            logger.info(log_message)
 
     def flush_buffer(self) -> None:
         """Flush event buffer to file."""

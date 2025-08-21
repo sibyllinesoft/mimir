@@ -19,7 +19,7 @@ import psutil
 import pytest
 
 from repoindex.data.schemas import (
-    CodeChunk,
+    VectorChunk,
     FeatureConfig,
     RepoMap,
     SearchResponse,

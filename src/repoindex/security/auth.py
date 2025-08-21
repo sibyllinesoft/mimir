@@ -511,7 +511,7 @@ class AuthManager:
             "cancel": ["repo:cancel"],
         }
 
-        logger.info("Authentication manager initialized", require_auth=require_auth)
+        logger.info(f"Authentication manager initialized (require_auth: {require_auth})")
 
     async def authenticate_request(
         self, tool_name: str, client_ip: str, auth_header: str | None = None
