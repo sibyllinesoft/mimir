@@ -1,0 +1,160 @@
+groups:
+  - name: mimir_pipeline_alerts
+    rules:
+      - alert: PipelineFailureRateHigh
+        expr: rate(mimir_pipeline_executions_total{status="error"}[5m]) / rate(mimir_pipeline_executions_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: high
+          component: pipeline
+        annotations:
+          summary: "High pipeline failure rate detected"
+          description: "Pipeline failure rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      - alert: PipelineStageStuck
+        expr: mimir_pipeline_active_count > 10
+        for: 10m
+        labels:
+          severity: warning
+          component: pipeline
+        annotations:
+          summary: "Too many active pipelines"
+          description: "{{ $value }} pipelines have been active for more than 10 minutes"
+
+      - alert: PipelineQueueBacklog
+        expr: mimir_pipeline_queue_length > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: pipeline
+        annotations:
+          summary: "Pipeline queue backlog detected"
+          description: "{{ $value }} pipelines are queued for execution"
+
+  - name: mimir_search_alerts
+    rules:
+      - alert: SearchLatencyHigh
+        expr: histogram_quantile(0.95, rate(mimir_search_duration_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: warning
+          component: search
+        annotations:
+          summary: "High search latency detected"
+          description: "95th percentile search latency is {{ $value }}s"
+
+      - alert: SearchErrorRateHigh
+        expr: rate(mimir_search_requests_total{status="error"}[5m]) / rate(mimir_search_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: high
+          component: search
+        annotations:
+          summary: "High search error rate"
+          description: "Search error rate is {{ $value | humanizePercentage }}"
+
+      - alert: VectorSimilarityLow
+        expr: histogram_quantile(0.50, rate(mimir_vector_similarity_scores_bucket[10m])) < 0.3
+        for: 5m
+        labels:
+          severity: warning
+          component: search
+        annotations:
+          summary: "Low vector similarity scores"
+          description: "Median vector similarity score has dropped to {{ $value }}"
+
+  - name: mimir_system_alerts
+    rules:
+      - alert: HighMemoryUsage
+        expr: mimir_memory_usage_bytes{type="rss"} / 1024 / 1024 / 1024 > 8
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}GB"
+
+      - alert: HighCPUUsage
+        expr: mimir_cpu_usage_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}%"
+
+      - alert: LowDiskSpace
+        expr: (mimir_disk_usage_bytes{type="free"} / mimir_disk_usage_bytes{type="total"}) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Low disk space"
+          description: "Only {{ $value }}% disk space remaining on {{ $labels.path }}"
+
+      - alert: ServiceDown
+        expr: up{job="mimir"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Mimir service is down"
+          description: "Mimir service has been unreachable for more than 1 minute"
+
+  - name: mimir_health_alerts
+    rules:
+      - alert: HealthCheckFailing
+        expr: mimir_health_checks_total{status="unhealthy"} > 0
+        for: 3m
+        labels:
+          severity: high
+          component: health
+        annotations:
+          summary: "Health check failures detected"
+          description: "{{ $value }} health checks are failing for component {{ $labels.component }}"
+
+      - alert: ServiceNotReady
+        expr: mimir_service_ready == 0
+        for: 2m
+        labels:
+          severity: high
+          component: health
+        annotations:
+          summary: "Service not ready"
+          description: "Mimir service is not ready to accept requests"
+
+  - name: mimir_business_alerts
+    rules:
+      - alert: LowIndexingThroughput
+        expr: rate(mimir_repositories_indexed_total[1h]) * 3600 < 5
+        for: 30m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "Low repository indexing throughput"
+          description: "Only {{ $value }} repositories indexed per hour"
+
+      - alert: NoSearchActivity
+        expr: rate(mimir_search_requests_total[1h]) * 3600 < 10
+        for: 2h
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Low search activity"
+          description: "Only {{ $value }} searches per hour"
+
+      - alert: CacheHitRateLow
+        expr: rate(mimir_cache_hits_total[10m]) / (rate(mimir_cache_hits_total[10m]) + rate(mimir_cache_misses_total[10m])) < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} for {{ $labels.cache_type }}"

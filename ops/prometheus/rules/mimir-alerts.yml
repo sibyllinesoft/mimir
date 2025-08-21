@@ -1,0 +1,203 @@
+# Prometheus Alerting Rules for Mimir Deep Code Research System
+# Production-ready alerts for monitoring service health and performance
+
+groups:
+  - name: mimir.rules
+    interval: 30s
+    rules:
+      # High-level service availability alerts
+      - alert: MimirServerDown
+        expr: up{job="mimir-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mimir-server
+        annotations:
+          summary: "Mimir MCP Server is down"
+          description: "Mimir MCP Server has been down for more than 1 minute."
+
+      - alert: MimirUIDown
+        expr: up{job="mimir-ui"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: mimir-ui
+        annotations:
+          summary: "Mimir UI is down"
+          description: "Mimir UI has been down for more than 2 minutes."
+
+      # Performance and resource alerts
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total{job="mimir-server"}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: mimir-server
+        annotations:
+          summary: "High CPU usage on Mimir Server"
+          description: "CPU usage is above 80% for more than 5 minutes."
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes{job="mimir-server"} / 1024 / 1024 > 1500
+        for: 5m
+        labels:
+          severity: warning
+          service: mimir-server
+        annotations:
+          summary: "High memory usage on Mimir Server"
+          description: "Memory usage is above 1.5GB for more than 5 minutes."
+
+      # Pipeline performance alerts
+      - alert: SlowPipelineExecution
+        expr: histogram_quantile(0.95, rate(mimir_pipeline_duration_seconds_bucket[5m])) > 300
+        for: 3m
+        labels:
+          severity: warning
+          service: mimir-pipeline
+        annotations:
+          summary: "Slow pipeline execution detected"
+          description: "95th percentile pipeline execution time is above 5 minutes."
+
+      - alert: HighPipelineFailureRate
+        expr: rate(mimir_pipeline_failures_total[5m]) / rate(mimir_pipeline_executions_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          service: mimir-pipeline
+        annotations:
+          summary: "High pipeline failure rate"
+          description: "Pipeline failure rate is above 10% for more than 2 minutes."
+
+      # Storage and disk space alerts
+      - alert: LowDiskSpace
+        expr: node_filesystem_avail_bytes{mountpoint="/app/data"} / node_filesystem_size_bytes{mountpoint="/app/data"} < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: mimir-storage
+        annotations:
+          summary: "Low disk space on data volume"
+          description: "Data volume has less than 10% free space remaining."
+
+      - alert: HighDiskUsage
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: mimir-storage
+        annotations:
+          summary: "High disk I/O usage"
+          description: "Disk I/O usage is above 80% for more than 5 minutes."
+
+      # Redis cache alerts
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis cache is down"
+          description: "Redis cache has been down for more than 1 minute."
+
+      - alert: HighRedisCacheEvictions
+        expr: rate(redis_evicted_keys_total[5m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "High Redis cache eviction rate"
+          description: "Redis is evicting more than 10 keys per second for more than 3 minutes."
+
+      # HTTP and API alerts
+      - alert: HighHTTPErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: nginx
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: "HTTP 5xx error rate is above 5% for more than 2 minutes."
+
+      - alert: SlowHTTPResponse
+        expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: nginx
+        annotations:
+          summary: "Slow HTTP response times"
+          description: "95th percentile HTTP response time is above 5 seconds."
+
+      # Search and indexing specific alerts
+      - alert: SlowSearchQueries
+        expr: histogram_quantile(0.95, rate(mimir_search_duration_seconds_bucket[5m])) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: mimir-search
+        annotations:
+          summary: "Slow search query performance"
+          description: "95th percentile search query time is above 10 seconds."
+
+      - alert: HighIndexingQueueSize
+        expr: mimir_indexing_queue_size > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: mimir-indexing
+        annotations:
+          summary: "Large indexing queue detected"
+          description: "Indexing queue has more than 100 pending items for more than 5 minutes."
+
+      # System connectivity alerts
+      - alert: TooManyOpenConnections
+        expr: process_open_fds{job="mimir-server"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: mimir-server
+        annotations:
+          summary: "Too many open file descriptors"
+          description: "Mimir server has more than 1000 open file descriptors."
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: mimir_db_connections_active / mimir_db_connections_max > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          service: mimir-database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Database connection pool is more than 90% utilized."
+
+  - name: mimir.infrastructure.rules
+    interval: 60s
+    rules:
+      # Infrastructure health recording rules
+      - record: mimir:service_availability:5m
+        expr: avg_over_time(up{job=~"mimir-.*"}[5m])
+
+      - record: mimir:response_time:95th:5m
+        expr: histogram_quantile(0.95, rate(mimir_request_duration_seconds_bucket[5m]))
+
+      - record: mimir:error_rate:5m
+        expr: rate(mimir_errors_total[5m]) / rate(mimir_requests_total[5m])
+
+      - record: mimir:pipeline_success_rate:5m
+        expr: rate(mimir_pipeline_successes_total[5m]) / rate(mimir_pipeline_executions_total[5m])
+
+  - name: mimir.capacity.rules
+    interval: 300s
+    rules:
+      # Capacity planning recording rules
+      - record: mimir:cpu_utilization:30m
+        expr: avg_over_time(rate(process_cpu_seconds_total{job="mimir-server"}[5m])[30m:5m]) * 100
+
+      - record: mimir:memory_utilization:30m
+        expr: avg_over_time(process_resident_memory_bytes{job="mimir-server"}[30m]) / 1024 / 1024
+
+      - record: mimir:storage_growth_rate:24h
+        expr: increase(node_filesystem_size_bytes{mountpoint="/app/data"}[24h]) / 1024 / 1024 / 1024

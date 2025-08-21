@@ -1,0 +1,312 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Mimir Business Metrics",
+    "description": "Business intelligence and KPI tracking for repository indexing",
+    "tags": ["mimir", "business", "kpi"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Repositories Indexed Today",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(mimir_repositories_indexed_total[24h])",
+            "legendFormat": "Repositories",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 0, "y": 0, "w": 3, "h": 4},
+        "options": {
+          "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 5},
+                {"color": "green", "value": 10}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Symbols Extracted Today",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(mimir_symbols_extracted_total[24h])",
+            "legendFormat": "Symbols",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 3, "y": 0, "w": 3, "h": 4},
+        "options": {
+          "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 1000},
+                {"color": "green", "value": 5000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Embeddings Created Today",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(mimir_embeddings_created_total[24h])",
+            "legendFormat": "Embeddings",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 6, "y": 0, "w": 3, "h": 4},
+        "options": {
+          "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 500},
+                {"color": "green", "value": 2000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Search Requests Today",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(mimir_search_requests_total[24h])",
+            "legendFormat": "Searches",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 9, "y": 0, "w": 3, "h": 4},
+        "options": {
+          "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 50},
+                {"color": "green", "value": 200}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Repository Indexing Trends",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mimir_repositories_indexed_total[1h])",
+            "legendFormat": "Repositories/hour",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 0, "y": 4, "w": 6, "h": 8},
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Language Distribution",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (language) (increase(mimir_pipeline_executions_total{status=\"success\"}[24h]))",
+            "legendFormat": "{{language}}",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 6, "y": 4, "w": 6, "h": 8},
+        "options": {
+          "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+          "pieType": "pie",
+          "tooltip": {"mode": "single", "sort": "none"},
+          "legend": {"displayMode": "visible", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 7,
+        "title": "Average Processing Time by Stage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(mimir_pipeline_duration_seconds_bucket[1h]))",
+            "legendFormat": "P50 - {{stage}}",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(mimir_pipeline_duration_seconds_bucket[1h]))",
+            "legendFormat": "P95 - {{stage}}",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+        "options": {
+          "legend": {"displayMode": "table", "placement": "bottom"},
+          "tooltip": {"mode": "multi", "sort": "desc"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Success Rate by Language",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mimir_pipeline_executions_total{status=\"success\"}[1h]) / rate(mimir_pipeline_executions_total[1h]) * 100",
+            "legendFormat": "{{language}}",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 0, "y": 20, "w": 6, "h": 8},
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Search Quality Metrics",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(mimir_vector_similarity_scores_bucket[1h]))",
+            "legendFormat": "P50 Similarity Score",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(mimir_vector_similarity_scores_bucket[1h]))",
+            "legendFormat": "P95 Similarity Score",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 6, "y": 20, "w": 6, "h": 8},
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "max": 1,
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Cache Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mimir_cache_hits_total[5m]) / (rate(mimir_cache_hits_total[5m]) + rate(mimir_cache_misses_total[5m])) * 100",
+            "legendFormat": "{{cache_type}} Hit Rate %",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 0, "y": 28, "w": 6, "h": 8},
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Throughput Comparison",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mimir_pipeline_executions_total[1h]) * 3600",
+            "legendFormat": "Pipelines/hour",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          },
+          {
+            "expr": "rate(mimir_search_requests_total[1h]) * 3600",
+            "legendFormat": "Searches/hour",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 6, "y": 28, "w": 6, "h": 8},
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      }
+    ],
+    "time": {"from": "now-24h", "to": "now"},
+    "timepicker": {},
+    "templating": {"list": []},
+    "annotations": {"list": []},
+    "refresh": "1m",
+    "schemaVersion": 30,
+    "style": "dark",
+    "version": 1,
+    "weekStart": ""
+  },
+  "overwrite": true
+}

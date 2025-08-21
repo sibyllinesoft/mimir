@@ -1,0 +1,25 @@
+# Grafana Dashboard Provisioning Configuration
+# Automatic loading of Mimir monitoring dashboards
+
+apiVersion: 1
+
+providers:
+  - name: 'mimir-dashboards'
+    orgId: 1
+    folder: 'Mimir'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/mimir
+
+  - name: 'infrastructure-dashboards'
+    orgId: 1
+    folder: 'Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/infrastructure

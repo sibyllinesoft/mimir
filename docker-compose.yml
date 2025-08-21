@@ -1,0 +1,232 @@
+# Docker Compose for Mimir Deep Code Research System
+# Development and production-ready container orchestration
+
+version: '3.8'
+
+services:
+  # Main MCP Server Service
+  mimir-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: mimir-server
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      - MIMIR_STORAGE_DIR=/app/data
+      - MIMIR_CACHE_DIR=/app/cache
+      - MIMIR_LOG_LEVEL=${MIMIR_LOG_LEVEL:-INFO}
+      - MIMIR_MAX_WORKERS=${MIMIR_MAX_WORKERS:-4}
+      - MIMIR_TIMEOUT=${MIMIR_TIMEOUT:-300}
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    
+    # Volume mounts for data persistence
+    volumes:
+      - mimir_data:/app/data
+      - mimir_cache:/app/cache
+      - mimir_logs:/app/logs
+      - /tmp:/tmp:rw
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import asyncio; from src.repoindex.mcp.server import MCPServer; print('Health check passed')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    
+    # Network
+    networks:
+      - mimir-network
+
+  # Optional UI Service
+  mimir-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: mimir-ui
+    restart: unless-stopped
+    command: ["python", "-m", "repoindex.ui.app"]
+    
+    # Environment configuration
+    environment:
+      - MIMIR_STORAGE_DIR=/app/data
+      - MIMIR_CACHE_DIR=/app/cache
+      - MIMIR_LOG_LEVEL=${MIMIR_LOG_LEVEL:-INFO}
+      - MIMIR_UI_HOST=0.0.0.0
+      - MIMIR_UI_PORT=8000
+    
+    # Volume mounts (shared with server)
+    volumes:
+      - mimir_data:/app/data:ro
+      - mimir_cache:/app/cache:ro
+      - mimir_logs:/app/logs
+    
+    # Port mapping
+    ports:
+      - "${MIMIR_UI_PORT:-8000}:8000"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    
+    # Network
+    networks:
+      - mimir-network
+    
+    # Dependencies
+    depends_on:
+      mimir-server:
+        condition: service_healthy
+
+  # Redis for caching (optional production enhancement)
+  redis:
+    image: redis:7-alpine
+    container_name: mimir-redis
+    restart: unless-stopped
+    
+    # Configuration
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    
+    # Volume for persistence
+    volumes:
+      - redis_data:/data
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    
+    # Network
+    networks:
+      - mimir-network
+
+  # Monitoring with Prometheus (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mimir-prometheus
+    restart: unless-stopped
+    
+    # Configuration
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    
+    # Port mapping
+    ports:
+      - "9090:9090"
+    
+    # Command
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    
+    # Network
+    networks:
+      - mimir-network
+
+# Named volumes for data persistence
+volumes:
+  mimir_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${MIMIR_DATA_PATH:-./data}
+      o: bind
+  
+  mimir_cache:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${MIMIR_CACHE_PATH:-./cache}
+      o: bind
+  
+  mimir_logs:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${MIMIR_LOGS_PATH:-./logs}
+      o: bind
+  
+  redis_data:
+    driver: local
+  
+  prometheus_data:
+    driver: local
+
+# Network configuration
+networks:
+  mimir-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: mimir-br0
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

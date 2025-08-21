@@ -1,0 +1,176 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Mimir Performance Monitoring",
+    "description": "System performance, search latency, and resource utilization",
+    "tags": ["mimir", "performance", "latency"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Search Request Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(mimir_search_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(mimir_search_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(mimir_search_duration_seconds_bucket[5m]))",
+            "legendFormat": "P99",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 8},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Search Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mimir_search_requests_total[5m])",
+            "legendFormat": "{{search_type}} - {{status}}",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 8},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "mimir_memory_usage_bytes{type=\"rss\"} / 1024 / 1024",
+            "legendFormat": "RSS Memory (MB)",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          },
+          {
+            "expr": "mimir_memory_usage_bytes{type=\"vms\"} / 1024 / 1024",
+            "legendFormat": "Virtual Memory (MB)",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 0, "y": 8, "w": 6, "h": 8},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decbytes",
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "mimir_cpu_usage_percent",
+            "legendFormat": "CPU %",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 6, "y": 8, "w": 6, "h": 8},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Vector Similarity Score Distribution",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "increase(mimir_vector_similarity_scores_bucket[5m])",
+            "legendFormat": "{{le}}",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "options": {
+          "calculate": true,
+          "yAxis": {"unit": "short"}
+        }
+      },
+      {
+        "id": 6,
+        "title": "Symbol Lookup Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(mimir_symbol_lookup_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(mimir_symbol_lookup_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 0, "y": 24, "w": 6, "h": 8},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Disk Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "mimir_disk_usage_bytes{type=\"used\"} / mimir_disk_usage_bytes{type=\"total\"} * 100",
+            "legendFormat": "{{path}} Used %",
+            "datasource": {"type": "prometheus", "uid": "prometheus"}
+          }
+        ],
+        "gridPos": {"x": 6, "y": 24, "w": 6, "h": 8},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "custom": {"drawStyle": "line", "lineInterpolation": "linear"}
+          }
+        }
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "timepicker": {},
+    "templating": {"list": []},
+    "annotations": {"list": []},
+    "refresh": "30s",
+    "schemaVersion": 30,
+    "style": "dark",
+    "version": 1,
+    "weekStart": ""
+  },
+  "overwrite": true
+}
