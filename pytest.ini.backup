@@ -1,0 +1,24 @@
+[tool:pytest]
+minversion = 6.0
+testpaths = tests
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+addopts = 
+    --strict-markers
+    --strict-config
+    --verbose
+    --tb=short
+    --cov=src/repoindex
+    --cov-report=html:htmlcov
+    --cov-report=term-missing
+    --cov-fail-under=80
+markers =
+    unit: Unit tests
+    integration: Integration tests
+    slow: Slow-running tests
+    asyncio: Async tests
+filterwarnings =
+    ignore::DeprecationWarning
+    ignore::PendingDeprecationWarning
+asyncio_mode = auto
