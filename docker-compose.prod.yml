@@ -69,9 +69,6 @@ services:
         labels: "service,environment,version"
     
     # Enhanced security for production
-    security_opt:
-      - no-new-privileges:true
-      - seccomp:unconfined
     cap_drop:
       - ALL
     cap_add:
