@@ -9,7 +9,7 @@ __version__ = "0.1.0"
 __author__ = "Mimir Team"
 __description__ = "Deep Code Research System - MCP server for intelligent repository indexing"
 
-from .pipeline.run import IndexingPipeline
 from .mcp.server import MCPServer
+from .pipeline.run import IndexingPipeline
 
 __all__ = ["IndexingPipeline", "MCPServer"]
