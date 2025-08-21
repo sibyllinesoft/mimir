@@ -322,23 +322,72 @@ class TestMCPUtilities:
     @pytest.mark.asyncio
     async def test_get_index_id_for_repo(self, mcp_server, sample_repo_dir):
         """Test getting index ID for repository."""
-        # TODO: This method doesn't exist yet in the implementation
-        # This test should be implemented once index reuse functionality is added
-        pytest.skip("Method _get_index_id_for_repo not implemented yet")
+        # Test with non-existent repository index
+        index_id = mcp_server._get_index_id_for_repo(str(sample_repo_dir), "HEAD")
+        assert index_id is None
+        
+        # Create a mock manifest to test positive case
+        expected_id = mcp_server._generate_pipeline_id(str(sample_repo_dir), "HEAD") 
+        index_dir = mcp_server.indexes_dir / expected_id
+        index_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = index_dir / "manifest.json"
+        manifest_path.write_text('{"test": "manifest"}')
+        
+        # Now should return the index ID
+        index_id = mcp_server._get_index_id_for_repo(str(sample_repo_dir), "HEAD")
+        assert index_id == expected_id
 
     @pytest.mark.asyncio
     async def test_load_index_manifest(self, mcp_server, temp_dir):
         """Test loading index manifest."""
-        # TODO: This method doesn't exist yet in the implementation
-        # This test should be implemented once manifest loading functionality is added
-        pytest.skip("Method _load_index_manifest not implemented yet")
+        # Test with non-existent manifest
+        manifest = mcp_server._load_index_manifest("non_existent_id")
+        assert manifest is None
+        
+        # Create a test manifest
+        test_index_id = "test_index_123"
+        index_dir = mcp_server.indexes_dir / test_index_id
+        index_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = index_dir / "manifest.json"
+        
+        test_manifest_data = {
+            "index_id": test_index_id,
+            "created_at": "2024-01-01T00:00:00Z",
+            "repo": {"root": "/test/repo", "rev": "HEAD"},
+            "config": {"languages": ["ts", "js"]}
+        }
+        
+        with open(manifest_path, "w") as f:
+            json.dump(test_manifest_data, f)
+        
+        # Load the manifest
+        loaded_manifest = mcp_server._load_index_manifest(test_index_id)
+        assert loaded_manifest is not None
+        assert loaded_manifest["index_id"] == test_index_id
+        assert loaded_manifest["repo"]["root"] == "/test/repo"
 
     @pytest.mark.asyncio
     async def test_generate_pipeline_id(self, mcp_server):
         """Test pipeline ID generation."""
-        # TODO: This method doesn't exist yet in the implementation
-        # Pipeline IDs are generated in the IndexingPipeline class
-        pytest.skip("Method _generate_pipeline_id not implemented in MCPServer")
+        # Test deterministic ID generation
+        repo_path = "/test/repo"
+        revision = "HEAD"
+        
+        # Should generate same ID for same inputs
+        id1 = mcp_server._generate_pipeline_id(repo_path, revision)
+        id2 = mcp_server._generate_pipeline_id(repo_path, revision)
+        assert id1 == id2
+        
+        # Should generate different ID for different inputs
+        id3 = mcp_server._generate_pipeline_id(repo_path, "main")
+        assert id1 != id3
+        
+        id4 = mcp_server._generate_pipeline_id("/different/repo", revision)
+        assert id1 != id4
+        
+        # Should be a valid hex string of expected length (16 chars)
+        assert len(id1) == 16
+        assert all(c in "0123456789abcdef" for c in id1)
 
     @pytest.mark.asyncio
     async def test_cleanup_completed_pipelines(self, mcp_server):
