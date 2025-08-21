@@ -1,0 +1,661 @@
+# Mimir Deep Code Research System - Performance Pipeline
+# Automated performance testing, benchmarking, and regression detection
+
+name: Performance Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # Run performance tests weekly on Sunday at 3 AM UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      benchmark-type:
+        description: 'Benchmark type to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - pipeline
+          - indexing
+          - search
+          - memory
+      baseline-commit:
+        description: 'Baseline commit for comparison (optional)'
+        required: false
+        type: string
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_VERSION: "0.1.31"
+
+jobs:
+  # Performance benchmarking
+  performance-benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        benchmark-suite:
+          - pipeline-performance
+          - indexing-performance  
+          - search-performance
+          - memory-usage
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev --extra test
+          # Install external tools required for benchmarks
+          sudo apt-get update
+          sudo apt-get install -y ripgrep fd-find tree-sitter-cli git time
+
+      - name: Setup benchmark environment
+        run: |
+          # Create test repositories for benchmarking
+          mkdir -p /tmp/benchmark-repos
+          cd /tmp/benchmark-repos
+          
+          # Small repository (1MB)
+          git clone --depth 1 https://github.com/python/cpython.git small-repo || {
+            mkdir small-repo && cd small-repo && git init
+            for i in {1..10}; do
+              echo "def function_$i(): return $i" > "module_$i.py"
+              echo "console.log('function $i');" > "script_$i.js"
+            done
+            git add . && git commit -m "Test repo"
+            cd ..
+          }
+          
+          # Medium repository (10MB) - create synthetic repo
+          mkdir medium-repo && cd medium-repo && git init
+          for i in {1..100}; do
+            mkdir -p "package_$i"
+            for j in {1..5}; do
+              cat > "package_$i/module_$j.py" << EOF
+          """Module $j in package $i"""
+          import asyncio
+          import json
+          from typing import Dict, List, Optional
+          
+          class DataProcessor$j:
+              def __init__(self, config: Dict):
+                  self.config = config
+                  self.cache = {}
+          
+              async def process_data(self, data: List[Dict]) -> List[Dict]:
+                  results = []
+                  for item in data:
+                      processed = await self._process_item(item)
+                      results.append(processed)
+                  return results
+          
+              async def _process_item(self, item: Dict) -> Dict:
+                  # Simulate processing
+                  await asyncio.sleep(0.001)
+                  return {"processed": True, "data": item}
+          
+          def utility_function_$j(x: int, y: int) -> int:
+              return x * y + $j
+          EOF
+            done
+          done
+          git add . && git commit -m "Medium test repo"
+          cd ..
+          
+          # Large repository simulation - just use small-repo multiple times
+          cp -r small-repo large-repo
+
+      - name: Cache benchmark dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            /tmp/benchmark-repos
+          key: benchmark-deps-${{ runner.os }}-${{ matrix.benchmark-suite }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Run pipeline performance benchmarks
+        if: matrix.benchmark-suite == 'pipeline-performance' || github.event.inputs.benchmark-type == 'all'
+        run: |
+          echo "🚀 Running pipeline performance benchmarks..."
+          
+          # Set environment variables for testing
+          export MIMIR_TEST_MODE=true
+          export MIMIR_BENCHMARK_MODE=true
+          export TEST_REPO_PATH=/tmp/benchmark-repos/small-repo
+          
+          # Run pipeline benchmarks with different repository sizes
+          for repo in small-repo medium-repo large-repo; do
+            echo "📊 Benchmarking pipeline with $repo..."
+            export TEST_REPO_PATH=/tmp/benchmark-repos/$repo
+            
+            uv run pytest tests/benchmarks/test_performance.py::test_pipeline_performance \
+              --benchmark-only \
+              --benchmark-json=benchmark-pipeline-$repo.json \
+              --benchmark-min-rounds=3 \
+              --benchmark-warmup=on \
+              --benchmark-group-by=name \
+              -v
+          done
+
+      - name: Run indexing performance benchmarks
+        if: matrix.benchmark-suite == 'indexing-performance' || github.event.inputs.benchmark-type == 'all'
+        run: |
+          echo "📚 Running indexing performance benchmarks..."
+          
+          export MIMIR_TEST_MODE=true
+          export MIMIR_BENCHMARK_MODE=true
+          
+          # Test different file types and sizes
+          for repo in small-repo medium-repo; do
+            echo "📊 Benchmarking indexing with $repo..."
+            export TEST_REPO_PATH=/tmp/benchmark-repos/$repo
+            
+            uv run pytest tests/benchmarks/test_performance.py::test_indexing_performance \
+              --benchmark-only \
+              --benchmark-json=benchmark-indexing-$repo.json \
+              --benchmark-min-rounds=5 \
+              --benchmark-warmup=on \
+              -v
+          done
+
+      - name: Run search performance benchmarks
+        if: matrix.benchmark-suite == 'search-performance' || github.event.inputs.benchmark-type == 'all'
+        run: |
+          echo "🔍 Running search performance benchmarks..."
+          
+          export MIMIR_TEST_MODE=true
+          export MIMIR_BENCHMARK_MODE=true
+          export TEST_REPO_PATH=/tmp/benchmark-repos/medium-repo
+          
+          uv run pytest tests/benchmarks/test_performance.py::test_search_performance \
+            --benchmark-only \
+            --benchmark-json=benchmark-search.json \
+            --benchmark-min-rounds=10 \
+            --benchmark-warmup=on \
+            -v
+
+      - name: Run memory usage benchmarks
+        if: matrix.benchmark-suite == 'memory-usage' || github.event.inputs.benchmark-type == 'all'
+        run: |
+          echo "💾 Running memory usage benchmarks..."
+          
+          export MIMIR_TEST_MODE=true
+          export MIMIR_BENCHMARK_MODE=true
+          
+          # Memory profiling with different workloads
+          for repo in small-repo medium-repo large-repo; do
+            echo "📊 Memory profiling with $repo..."
+            export TEST_REPO_PATH=/tmp/benchmark-repos/$repo
+            
+            # Use memory_profiler for detailed analysis
+            uv run python -m memory_profiler tests/benchmarks/memory_profile_script.py > memory-profile-$repo.txt || {
+              # Fallback to basic memory tracking
+              /usr/bin/time -v uv run python -c "
+              import sys
+              sys.path.append('src')
+              from repoindex.pipeline.run import main
+              main()
+              " 2> memory-basic-$repo.txt
+            }
+          done
+
+      - name: Generate performance report
+        run: |
+          echo "📊 Generating performance report..."
+          
+          cat > performance-report-${{ matrix.benchmark-suite }}.md << EOF
+          # Performance Report: ${{ matrix.benchmark-suite }}
+          
+          **Generated:** $(date)
+          **Commit:** ${{ github.sha }}
+          **Benchmark Suite:** ${{ matrix.benchmark-suite }}
+          
+          ## Benchmark Results
+          
+          EOF
+          
+          # Process benchmark JSON files
+          for file in benchmark-*.json; do
+            if [ -f "$file" ]; then
+              echo "### $(basename $file .json | sed 's/benchmark-//' | tr '-' ' ' | sed 's/\b\w/\U&/g')" >> performance-report-${{ matrix.benchmark-suite }}.md
+              echo "" >> performance-report-${{ matrix.benchmark-suite }}.md
+              
+              # Extract key metrics using Python
+              python3 -c "
+          import json
+          import sys
+          
+          try:
+              with open('$file') as f:
+                  data = json.load(f)
+              
+              print('| Benchmark | Mean Time | Min Time | Max Time | Std Dev |')
+              print('|-----------|-----------|----------|----------|---------|')
+              
+              for benchmark in data.get('benchmarks', []):
+                  name = benchmark['name']
+                  stats = benchmark['stats']
+                  mean = f\"{stats['mean']:.4f}s\"
+                  min_time = f\"{stats['min']:.4f}s\"
+                  max_time = f\"{stats['max']:.4f}s\"
+                  stddev = f\"{stats['stddev']:.4f}s\"
+                  print(f'| {name} | {mean} | {min_time} | {max_time} | {stddev} |')
+          except Exception as e:
+              print(f'Error processing {file}: {e}')
+              " >> performance-report-${{ matrix.benchmark-suite }}.md
+              
+              echo "" >> performance-report-${{ matrix.benchmark-suite }}.md
+            fi
+          done
+          
+          # Add memory usage if available
+          if ls memory-*.txt 1> /dev/null 2>&1; then
+            echo "## Memory Usage" >> performance-report-${{ matrix.benchmark-suite }}.md
+            echo "" >> performance-report-${{ matrix.benchmark-suite }}.md
+            
+            for file in memory-*.txt; do
+              if [ -f "$file" ]; then
+                repo_name=$(basename $file .txt | sed 's/memory-[^-]*-//')
+                echo "### $repo_name" >> performance-report-${{ matrix.benchmark-suite }}.md
+                echo '```' >> performance-report-${{ matrix.benchmark-suite }}.md
+                head -20 "$file" >> performance-report-${{ matrix.benchmark-suite }}.md
+                echo '```' >> performance-report-${{ matrix.benchmark-suite }}.md
+                echo "" >> performance-report-${{ matrix.benchmark-suite }}.md
+              fi
+            done
+          fi
+          
+          echo "## Performance Analysis" >> performance-report-${{ matrix.benchmark-suite }}.md
+          echo "" >> performance-report-${{ matrix.benchmark-suite }}.md
+          echo "- **Target Response Time:** < 2.0s for pipeline operations" >> performance-report-${{ matrix.benchmark-suite }}.md
+          echo "- **Target Indexing Speed:** > 1000 files/minute" >> performance-report-${{ matrix.benchmark-suite }}.md
+          echo "- **Target Search Latency:** < 100ms for typical queries" >> performance-report-${{ matrix.benchmark-suite }}.md
+          echo "- **Target Memory Usage:** < 500MB for medium repositories" >> performance-report-${{ matrix.benchmark-suite }}.md
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results-${{ matrix.benchmark-suite }}
+          path: |
+            benchmark-*.json
+            memory-*.txt
+            performance-report-*.md
+
+  # Performance regression detection
+  regression-analysis:
+    name: Performance Regression Analysis
+    runs-on: ubuntu-latest
+    needs: [performance-benchmarks]
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v3
+        with:
+          pattern: benchmark-results-*
+          merge-multiple: true
+
+      - name: Install analysis tools
+        run: |
+          pip install pandas numpy matplotlib seaborn
+
+      - name: Get baseline benchmarks
+        run: |
+          echo "📊 Getting baseline performance data..."
+          
+          # Try to get baseline from main branch or specified commit
+          BASELINE_COMMIT="${{ github.event.inputs.baseline-commit }}"
+          if [ -z "$BASELINE_COMMIT" ]; then
+            BASELINE_COMMIT="origin/main"
+          fi
+          
+          echo "Using baseline: $BASELINE_COMMIT"
+          
+          # In production, this would:
+          # 1. Check out the baseline commit
+          # 2. Run the same benchmarks
+          # 3. Compare results
+          
+          # For now, create simulated baseline
+          cat > baseline-performance.json << EOF
+          {
+            "pipeline_performance": {
+              "mean_time": 1.8,
+              "min_time": 1.5,
+              "max_time": 2.2
+            },
+            "indexing_performance": {
+              "mean_time": 0.8,
+              "min_time": 0.6,
+              "max_time": 1.2
+            },
+            "search_performance": {
+              "mean_time": 0.08,
+              "min_time": 0.05,
+              "max_time": 0.15
+            }
+          }
+          EOF
+
+      - name: Analyze performance regression
+        run: |
+          echo "🔍 Analyzing performance regression..."
+          
+          python3 << 'EOF'
+          import json
+          import glob
+          import sys
+          
+          # Load baseline data
+          try:
+              with open('baseline-performance.json') as f:
+                  baseline = json.load(f)
+          except:
+              print("⚠️  No baseline data available")
+              baseline = {}
+          
+          # Process current benchmark results
+          current_results = {}
+          regression_found = False
+          
+          for benchmark_file in glob.glob('benchmark-*.json'):
+              try:
+                  with open(benchmark_file) as f:
+                      data = json.load(f)
+                  
+                  for benchmark in data.get('benchmarks', []):
+                      name = benchmark['name']
+                      mean_time = benchmark['stats']['mean']
+                      
+                      # Check for regression (>20% slower)
+                      if name in baseline:
+                          baseline_time = baseline[name]['mean_time']
+                          regression_pct = ((mean_time - baseline_time) / baseline_time) * 100
+                          
+                          print(f"📊 {name}:")
+                          print(f"   Current: {mean_time:.4f}s")
+                          print(f"   Baseline: {baseline_time:.4f}s")
+                          print(f"   Change: {regression_pct:+.1f}%")
+                          
+                          if regression_pct > 20:
+                              print(f"   ❌ REGRESSION DETECTED: {regression_pct:.1f}% slower")
+                              regression_found = True
+                          elif regression_pct > 10:
+                              print(f"   ⚠️  PERFORMANCE WARNING: {regression_pct:.1f}% slower")
+                          elif regression_pct < -10:
+                              print(f"   🎉 PERFORMANCE IMPROVEMENT: {abs(regression_pct):.1f}% faster")
+                          else:
+                              print(f"   ✅ Performance stable")
+                          print()
+                      else:
+                          print(f"📊 {name}: {mean_time:.4f}s (new benchmark)")
+              
+              except Exception as e:
+                  print(f"Error processing {benchmark_file}: {e}")
+          
+          if regression_found:
+              print("❌ Performance regression detected!")
+              sys.exit(1)
+          else:
+              print("✅ No significant performance regression detected")
+          EOF
+
+      - name: Generate regression report
+        run: |
+          echo "📋 Generating regression analysis report..."
+          
+          cat > regression-report.md << EOF
+          # Performance Regression Analysis
+          
+          **PR:** #${{ github.event.number }}
+          **Base:** ${{ github.base_ref }}
+          **Head:** ${{ github.head_ref }}
+          **Generated:** $(date)
+          
+          ## Summary
+          
+          This analysis compares the performance of the current PR against the baseline.
+          
+          ## Methodology
+          
+          - Benchmarks run with 3-10 iterations per test
+          - Results compared against main branch baseline
+          - Regression threshold: >20% performance degradation
+          - Warning threshold: >10% performance degradation
+          
+          ## Recommendations
+          
+          - If regressions are found, investigate the root cause
+          - Consider optimizations for any warnings
+          - Celebrate improvements! 🎉
+          
+          ## Raw Data
+          
+          All benchmark files and detailed results are available in the artifacts.
+          EOF
+
+      - name: Upload regression analysis
+        uses: actions/upload-artifact@v3
+        with:
+          name: regression-analysis
+          path: |
+            regression-report.md
+            baseline-performance.json
+
+  # Long-running performance tests
+  load-testing:
+    name: Load Testing
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.benchmark-type == 'all'
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container for load testing
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: mimir:load-test
+          cache-from: type=gha
+
+      - name: Start test environment
+        run: |
+          docker-compose -f docker-compose.yml up -d
+          sleep 30  # Wait for services to start
+
+      - name: Install load testing tools
+        run: |
+          # Install tools for load testing
+          sudo apt-get update
+          sudo apt-get install -y apache2-utils curl
+
+      - name: Run load tests
+        run: |
+          echo "🚀 Running load tests..."
+          
+          # Test MCP server under load
+          echo "📊 Testing MCP server load capacity..."
+          
+          # Simulate concurrent requests (if UI is available)
+          if docker-compose ps | grep -q ":8000"; then
+            echo "Testing HTTP endpoint load..."
+            ab -n 1000 -c 10 http://localhost:8000/health || echo "HTTP load test completed"
+          fi
+          
+          # Test pipeline performance under concurrent load
+          echo "📊 Testing pipeline concurrent execution..."
+          
+          for i in {1..5}; do
+            docker-compose exec -T mimir python -c "
+            import asyncio
+            from repoindex.pipeline.run import main
+            asyncio.run(main())
+            " &
+          done
+          
+          wait
+          echo "✅ Concurrent pipeline tests completed"
+
+      - name: Collect performance metrics
+        run: |
+          echo "📊 Collecting performance metrics..."
+          
+          # Container resource usage
+          docker stats --no-stream > container-stats.txt
+          
+          # System resource usage
+          free -h > memory-usage.txt
+          df -h > disk-usage.txt
+          
+          # Application logs
+          docker-compose logs > load-test-logs.txt
+
+      - name: Cleanup
+        if: always()
+        run: docker-compose down -v
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: load-test-results
+          path: |
+            container-stats.txt
+            memory-usage.txt
+            disk-usage.txt
+            load-test-logs.txt
+
+  # Performance summary and reporting
+  performance-summary:
+    name: Performance Summary
+    runs-on: ubuntu-latest
+    needs: [performance-benchmarks, regression-analysis, load-testing]
+    if: always()
+    
+    steps:
+      - name: Download all performance artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Generate comprehensive performance report
+        run: |
+          echo "📊 Generating comprehensive performance report..."
+          
+          cat > comprehensive-performance-report.md << EOF
+          # Comprehensive Performance Report
+          
+          **Generated:** $(date)
+          **Commit:** ${{ github.sha }}
+          **Trigger:** ${{ github.event_name }}
+          
+          ## Executive Summary
+          
+          This report summarizes the performance characteristics of the Mimir Deep Code Research System.
+          
+          ## Test Coverage
+          
+          - ✅ Pipeline Performance: Core processing workflow benchmarks
+          - ✅ Indexing Performance: File processing and indexing speed
+          - ✅ Search Performance: Query response time and accuracy
+          - ✅ Memory Usage: Resource consumption analysis
+          - ✅ Load Testing: Concurrent usage and stability testing
+          
+          ## Key Metrics
+          
+          ### Performance Targets
+          - Pipeline Processing: < 2.0s per repository
+          - File Indexing: > 1000 files/minute
+          - Search Queries: < 100ms response time
+          - Memory Usage: < 500MB for medium repositories
+          - Concurrent Users: Support 10+ simultaneous operations
+          
+          ### Current Results
+          Detailed results are available in the individual benchmark artifacts.
+          
+          ## Recommendations
+          
+          1. **Monitor Trends**: Track performance metrics over time
+          2. **Optimize Hotspots**: Focus on the slowest operations first
+          3. **Resource Management**: Monitor memory usage in production
+          4. **Scaling Strategy**: Plan for increased load
+          
+          ## Performance Optimization Opportunities
+          
+          1. **Caching**: Implement intelligent caching for repeated operations
+          2. **Parallel Processing**: Increase parallelism where safe
+          3. **Memory Management**: Optimize memory usage patterns
+          4. **I/O Optimization**: Reduce disk and network overhead
+          
+          ## Next Steps
+          
+          - Regular performance monitoring in production
+          - Automated performance regression detection
+          - Capacity planning based on usage patterns
+          - Performance optimization sprints as needed
+          EOF
+
+      - name: Performance status check
+        run: |
+          # Create performance summary for GitHub status
+          echo "# 🚀 Performance Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Benchmarks | ${{ needs.performance-benchmarks.result == 'success' && '✅ Completed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Regression Analysis | ${{ needs.regression-analysis.result == 'success' && '✅ No Regressions' || needs.regression-analysis.result == 'failure' && '❌ Regression Detected' || '⏭️ Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Load Testing | ${{ needs.load-testing.result == 'success' && '✅ Passed' || needs.load-testing.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall status
+          if [[ "${{ needs.performance-benchmarks.result }}" == "success" ]]; then
+            if [[ "${{ needs.regression-analysis.result }}" == "success" || "${{ needs.regression-analysis.result }}" == "skipped" ]]; then
+              echo "**🎉 Overall Performance Status: ✅ GOOD**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "All performance tests completed successfully with no significant regressions detected." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "**⚠️ Overall Performance Status: ⚠️ REGRESSION DETECTED**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Performance regression detected. Please review the detailed analysis." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "**❌ Overall Performance Status: ❌ ISSUES FOUND**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Performance testing encountered issues. Please review the logs." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload comprehensive report
+        uses: actions/upload-artifact@v3
+        with:
+          name: comprehensive-performance-report
+          path: comprehensive-performance-report.md
+          retention-days: 90

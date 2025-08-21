@@ -1,0 +1,157 @@
+# Dependabot configuration for Mimir Deep Code Research System
+# Automated dependency updates with security focus
+
+version: 2
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "@mimir-maintainers"
+    assignees:
+      - "@security-team"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "python"
+      - "security"
+    # Group related updates
+    groups:
+      security-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "security-update"
+      testing-deps:
+        patterns:
+          - "pytest*"
+          - "*test*"
+          - "coverage*"
+          - "mock*"
+      dev-deps:
+        patterns:
+          - "black"
+          - "ruff"
+          - "mypy"
+          - "pre-commit"
+      fastapi-ecosystem:
+        patterns:
+          - "fastapi*"
+          - "uvicorn*"
+          - "pydantic*"
+          - "starlette*"
+    # Security updates get higher priority
+    priority-security-updates: true
+    # Allow version upgrades
+    allow:
+      - dependency-type: "direct"
+        update-type: "version-update:semver-patch"
+      - dependency-type: "direct"
+        update-type: "version-update:semver-minor"
+      - dependency-type: "indirect"
+        update-type: "security-update"
+    # Ignore specific packages if needed
+    ignore:
+      # Pin specific versions that need manual review
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tree-sitter*"
+        update-types: ["version-update:semver-major"]
+
+  # Docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "@mimir-maintainers"
+    assignees:
+      - "@devops-team"
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "infrastructure"
+    # Group container updates
+    groups:
+      base-images:
+        patterns:
+          - "python*"
+          - "*alpine*"
+          - "*slim*"
+          - "*bookworm*"
+    allow:
+      - dependency-type: "direct"
+        update-type: "version-update:semver-patch"
+      - dependency-type: "direct"
+        update-type: "version-update:semver-minor"
+      - dependency-type: "indirect"
+        update-type: "security-update"
+
+  # GitHub Actions dependencies  
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "UTC"
+    target-branch: "develop"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "@mimir-maintainers"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci/cd"
+    # Group related actions
+    groups:
+      security-actions:
+        patterns:
+          - "*security*"
+          - "*codeql*"
+          - "*trivy*"
+          - "*bandit*"
+      testing-actions:
+        patterns:
+          - "*test*"
+          - "*coverage*"
+          - "*pytest*"
+      build-actions:
+        patterns:
+          - "*build*"
+          - "*docker*"
+          - "*setup*"
+    allow:
+      - dependency-type: "direct"
+        update-type: "version-update:semver-patch"
+      - dependency-type: "direct"
+        update-type: "version-update:semver-minor"
+      - dependency-type: "direct"
+        update-type: "version-update:semver-major"
+
+# Custom vulnerability alerts
+# (These are configured in GitHub repository settings, not in this file)
+# - Enable Dependabot security updates
+# - Enable Dependabot version updates  
+# - Configure notification preferences for security alerts
+# - Set up integration with security scanning tools

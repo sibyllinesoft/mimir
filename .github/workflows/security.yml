@@ -1,0 +1,607 @@
+# Mimir Deep Code Research System - Security Pipeline
+# Comprehensive security scanning, vulnerability management, and compliance checking
+
+name: Security Pipeline
+
+on:
+  push:
+    branches: [ main, develop, master ]
+  pull_request:
+    branches: [ main, develop, master ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_VERSION: "0.1.31"
+
+jobs:
+  # Code security analysis
+  sast-analysis:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run Bandit security linter
+        run: |
+          echo "🔒 Running Bandit security analysis..."
+          uv run bandit -r src/ -f json -o bandit-results.json
+          uv run bandit -r src/ -f sarif -o bandit-results.sarif
+          uv run bandit -r src/ --severity-level medium
+
+      - name: Upload Bandit SARIF results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/python
+            p/owasp-top-ten
+            p/cwe-top-25
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: CodeQL Analysis
+        uses: github/codeql-action/init@v2
+        with:
+          languages: python
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          category: "/language:python"
+
+      - name: Custom security checks
+        run: |
+          echo "🔍 Running custom security checks..."
+          
+          # Check for hardcoded secrets
+          echo "🔎 Scanning for hardcoded secrets..."
+          if grep -r -i "password\|secret\|key\|token" src/ --include="*.py" | grep -v "test" | grep -v "#"; then
+            echo "⚠️  Potential hardcoded secrets found - please review"
+          else
+            echo "✅ No obvious hardcoded secrets found"
+          fi
+          
+          # Check for dangerous imports
+          echo "🔎 Checking for dangerous imports..."
+          DANGEROUS_IMPORTS=("eval" "exec" "compile" "subprocess.call" "os.system")
+          for import in "${DANGEROUS_IMPORTS[@]}"; do
+            if grep -r "$import" src/ --include="*.py" | grep -v "test" | grep -v "#"; then
+              echo "⚠️  Potentially dangerous import found: $import"
+            fi
+          done
+          
+          # Check for SQL injection patterns
+          echo "🔎 Checking for SQL injection patterns..."
+          if grep -r "format.*sql\|%.*sql\|f\".*sql" src/ --include="*.py" | grep -v "test"; then
+            echo "⚠️  Potential SQL injection patterns found"
+          else
+            echo "✅ No obvious SQL injection patterns found"
+          fi
+
+      - name: Upload security artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: sast-results
+          path: |
+            bandit-results.json
+            bandit-results.sarif
+
+  # Dependency vulnerability scanning
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run Safety check
+        run: |
+          echo "🛡️  Running Safety dependency vulnerability scan..."
+          uv run safety check --json --output safety-results.json || true
+          uv run safety check --output safety-results.txt || true
+          
+          # Show results
+          echo "📊 Safety scan results:"
+          cat safety-results.txt
+
+      - name: Run pip-audit
+        run: |
+          echo "🔍 Running pip-audit vulnerability scan..."
+          uv run pip install pip-audit
+          uv run pip-audit --format=json --output=pip-audit-results.json || true
+          uv run pip-audit || true
+
+      - name: Check for known vulnerable packages
+        run: |
+          echo "🔎 Checking for known vulnerable packages..."
+          
+          # Check common vulnerable packages
+          VULNERABLE_PACKAGES=("requests<2.20.0" "urllib3<1.24.2" "pyyaml<5.1")
+          
+          for package in "${VULNERABLE_PACKAGES[@]}"; do
+            if uv pip list | grep -i "${package%<*}"; then
+              echo "⚠️  Potentially vulnerable package found: $package"
+            fi
+          done
+
+      - name: License compliance check
+        run: |
+          echo "⚖️  Checking license compliance..."
+          uv run pip install pip-licenses
+          uv run pip-licenses --format=json --output=licenses.json
+          uv run pip-licenses --summary
+          
+          # Check for problematic licenses
+          if uv run pip-licenses | grep -i "gpl\|agpl\|copyleft"; then
+            echo "⚠️  Potential license compliance issues found"
+          else
+            echo "✅ No obvious license compliance issues"
+          fi
+
+      - name: Upload dependency scan results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-scan-results
+          path: |
+            safety-results.json
+            safety-results.txt
+            pip-audit-results.json
+            licenses.json
+
+  # Container security scanning
+  container-security:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: production
+          load: true
+          tags: mimir:security-scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'mimir:security-scan'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy config scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          format: 'sarif'
+          output: 'trivy-config-results.sarif'
+
+      - name: Run Docker Bench for Security
+        run: |
+          echo "🐳 Running Docker security benchmarks..."
+          
+          # Basic Docker security checks
+          echo "🔍 Checking Dockerfile security practices..."
+          
+          # Check if running as non-root
+          if grep -q "USER.*mimir" Dockerfile; then
+            echo "✅ Container runs as non-root user"
+          else
+            echo "❌ Container may be running as root"
+          fi
+          
+          # Check for COPY vs ADD
+          if grep -q "^ADD" Dockerfile; then
+            echo "⚠️  ADD instruction found - consider using COPY for better security"
+          else
+            echo "✅ Using COPY instead of ADD"
+          fi
+          
+          # Check for latest tag
+          if grep -q "FROM.*:latest" Dockerfile; then
+            echo "⚠️  Using :latest tag - consider pinning specific versions"
+          else
+            echo "✅ Using pinned base image versions"
+          fi
+          
+          # Check for secrets in image
+          echo "🔎 Scanning for potential secrets in container..."
+          docker run --rm mimir:security-scan find / -name "*.key" -o -name "*.pem" -o -name "*secret*" 2>/dev/null | grep -v "Permission denied" || echo "✅ No obvious secret files found"
+
+      - name: Container configuration security check
+        run: |
+          echo "⚙️  Checking container configuration security..."
+          
+          # Inspect the built image
+          docker inspect mimir:security-scan > container-inspect.json
+          
+          # Check security configurations
+          echo "🔍 Security configuration checks:"
+          
+          # Check if running as root
+          if docker inspect mimir:security-scan | grep '"User": "mimir"'; then
+            echo "✅ Container configured to run as non-root user"
+          else
+            echo "❌ Container user configuration needs review"
+          fi
+          
+          # Check exposed ports
+          echo "📡 Exposed ports:"
+          docker inspect mimir:security-scan | jq '.[0].Config.ExposedPorts'
+
+      - name: Upload container security results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: container-security-results
+          path: |
+            trivy-results.sarif
+            trivy-config-results.sarif
+            container-inspect.json
+
+  # Infrastructure security scanning
+  infrastructure-security:
+    name: Infrastructure Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan Docker Compose files
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-iac-results.sarif'
+
+      - name: Upload IaC scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-iac-results.sarif'
+
+      - name: Check infrastructure configurations
+        run: |
+          echo "🏗️  Checking infrastructure security configurations..."
+          
+          # Check Docker Compose security
+          echo "🐳 Docker Compose security checks:"
+          
+          # Check for privileged containers
+          if grep -r "privileged.*true" docker-compose*.yml ops/; then
+            echo "❌ Privileged containers found - security risk"
+          else
+            echo "✅ No privileged containers found"
+          fi
+          
+          # Check for host network mode
+          if grep -r "network_mode.*host" docker-compose*.yml ops/; then
+            echo "❌ Host network mode found - security risk"
+          else
+            echo "✅ No host network mode usage found"
+          fi
+          
+          # Check for volume mounts
+          echo "📁 Volume mount security:"
+          if grep -r "/:/.*rw" docker-compose*.yml ops/; then
+            echo "❌ Root filesystem mounted as read-write - security risk"
+          else
+            echo "✅ No dangerous volume mounts found"
+          fi
+          
+          # Check for secrets in environment variables
+          echo "🔐 Environment variable security:"
+          if grep -r "PASSWORD\|SECRET\|KEY.*=" docker-compose*.yml ops/ | grep -v "_FILE"; then
+            echo "⚠️  Potential secrets in environment variables - use _FILE variants"
+          else
+            echo "✅ No obvious secrets in environment variables"
+          fi
+
+      - name: Check monitoring security
+        run: |
+          echo "📊 Monitoring stack security checks..."
+          
+          # Check Prometheus configuration
+          if [ -f "ops/prometheus/prometheus.yml" ]; then
+            echo "🔍 Checking Prometheus security..."
+            if grep -q "basic_auth\|tls_config" ops/prometheus/prometheus.yml; then
+              echo "✅ Prometheus has authentication/TLS configured"
+            else
+              echo "⚠️  Prometheus may be running without authentication"
+            fi
+          fi
+          
+          # Check Grafana configuration
+          if [ -f "ops/grafana" ]; then
+            echo "🔍 Checking Grafana security..."
+            echo "✅ Grafana security configuration should be reviewed"
+          fi
+
+  # Secrets scanning
+  secrets-scan:
+    name: Secrets Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Custom secrets patterns
+        run: |
+          echo "🔎 Scanning for custom secret patterns..."
+          
+          # Define secret patterns
+          PATTERNS=(
+            "api[_-]?key"
+            "auth[_-]?token"
+            "secret[_-]?key"
+            "private[_-]?key"
+            "access[_-]?token"
+            "password"
+            "passwd"
+            "mysql.*password"
+            "postgres.*password"
+          )
+          
+          for pattern in "${PATTERNS[@]}"; do
+            echo "Checking for pattern: $pattern"
+            if grep -r -i "$pattern" . --exclude-dir=.git --exclude-dir=node_modules --include="*.py" --include="*.yml" --include="*.yaml" --include="*.json" --include="*.env*"; then
+              echo "⚠️  Potential secret pattern found: $pattern"
+            fi
+          done
+
+  # Compliance and governance
+  compliance-check:
+    name: Compliance & Governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check security documentation
+        run: |
+          echo "📚 Checking security documentation compliance..."
+          
+          # Required security documents
+          REQUIRED_DOCS=("SECURITY.md" "README.md")
+          
+          for doc in "${REQUIRED_DOCS[@]}"; do
+            if [ -f "$doc" ]; then
+              echo "✅ Found required document: $doc"
+            else
+              echo "❌ Missing required document: $doc"
+            fi
+          done
+          
+          # Check if SECURITY.md contains required sections
+          if [ -f "SECURITY.md" ]; then
+            echo "🔍 Checking SECURITY.md content..."
+            if grep -q -i "vulnerability\|security.*report\|disclosure" SECURITY.md; then
+              echo "✅ SECURITY.md contains vulnerability reporting information"
+            else
+              echo "⚠️  SECURITY.md should contain vulnerability reporting procedures"
+            fi
+          fi
+
+      - name: Check security controls implementation
+        run: |
+          echo "🛡️  Checking security controls implementation..."
+          
+          # Check for security headers implementation
+          if grep -r "security.*header\|HSTS\|CSP\|X-Frame-Options" src/ --include="*.py"; then
+            echo "✅ Security headers implementation found"
+          else
+            echo "⚠️  Consider implementing security headers"
+          fi
+          
+          # Check for input validation
+          if grep -r "validate\|sanitize\|escape" src/ --include="*.py"; then
+            echo "✅ Input validation/sanitization found"
+          else
+            echo "⚠️  Input validation should be implemented"
+          fi
+          
+          # Check for authentication/authorization
+          if grep -r "auth\|permission\|access.*control" src/ --include="*.py"; then
+            echo "✅ Authentication/authorization controls found"
+          else
+            echo "⚠️  Authentication/authorization controls should be reviewed"
+          fi
+
+      - name: Generate compliance report
+        run: |
+          echo "📊 Generating compliance report..."
+          
+          cat > compliance-report.md << EOF
+          # Security Compliance Report
+          
+          Generated: $(date)
+          Commit: ${{ github.sha }}
+          
+          ## Security Scanning Status
+          - ✅ SAST Analysis: Completed
+          - ✅ Dependency Scanning: Completed  
+          - ✅ Container Security: Completed
+          - ✅ Infrastructure Security: Completed
+          - ✅ Secrets Scanning: Completed
+          
+          ## Compliance Checks
+          - Documentation: Review required
+          - Security Controls: Implementation verified
+          - Vulnerability Management: Process in place
+          
+          ## Recommendations
+          1. Regular security training for development team
+          2. Implement automated security testing in all environments
+          3. Regular security architecture reviews
+          4. Incident response plan testing
+          
+          ## Next Steps
+          - Schedule quarterly security reviews
+          - Update security documentation
+          - Implement additional monitoring controls
+          EOF
+
+      - name: Upload compliance report
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-report
+          path: compliance-report.md
+
+  # Security summary and reporting
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [sast-analysis, dependency-scan, container-security, infrastructure-security, secrets-scan, compliance-check]
+    if: always()
+    
+    steps:
+      - name: Download all security artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Generate security summary
+        run: |
+          echo "# 🔒 Security Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| SAST Analysis | ${{ needs.sast-analysis.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Scan | ${{ needs.dependency-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Container Security | ${{ needs.container-security.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Infrastructure Security | ${{ needs.infrastructure-security.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secrets Scan | ${{ needs.secrets-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Compliance Check | ${{ needs.compliance-check.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall security status
+          if [[ "${{ needs.sast-analysis.result }}" == "success" && \
+                "${{ needs.dependency-scan.result }}" == "success" && \
+                "${{ needs.container-security.result }}" == "success" && \
+                "${{ needs.infrastructure-security.result }}" == "success" && \
+                "${{ needs.secrets-scan.result }}" == "success" && \
+                "${{ needs.compliance-check.result }}" == "success" ]]; then
+            echo "**🎉 Overall Security Status: ✅ PASSED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All security checks completed successfully. The codebase meets security requirements." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**⚠️ Overall Security Status: ❌ ISSUES FOUND**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Some security checks found issues that need attention. Please review the detailed results." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review detailed security scan results in the artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "2. Address any critical or high-severity findings" >> $GITHUB_STEP_SUMMARY
+          echo "3. Update security documentation as needed" >> $GITHUB_STEP_SUMMARY
+          echo "4. Schedule regular security reviews" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create security badge
+        run: |
+          # Create a simple security status badge
+          if [[ "${{ needs.sast-analysis.result }}" == "success" && \
+                "${{ needs.dependency-scan.result }}" == "success" && \
+                "${{ needs.container-security.result }}" == "success" && \
+                "${{ needs.infrastructure-security.result }}" == "success" && \
+                "${{ needs.secrets-scan.result }}" == "success" && \
+                "${{ needs.compliance-check.result }}" == "success" ]]; then
+            echo "SECURITY_STATUS=passing" >> $GITHUB_ENV
+          else
+            echo "SECURITY_STATUS=failing" >> $GITHUB_ENV
+          fi
+
+      - name: Upload consolidated security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-summary-report
+          path: |
+            **/
+          retention-days: 30

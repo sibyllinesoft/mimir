@@ -1,0 +1,634 @@
+# Mimir Deep Code Research System - Pull Request Checks
+# Fast feedback loop for pull requests with comprehensive validation
+
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [ main, develop, master ]
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_VERSION: "0.1.31"
+
+# Cancel previous runs for the same PR
+concurrency:
+  group: pr-checks-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # Skip checks for draft PRs unless they're marked ready
+  check-pr-status:
+    name: Check PR Status
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+      pr-number: ${{ steps.check.outputs.pr-number }}
+      base-ref: ${{ steps.check.outputs.base-ref }}
+      head-ref: ${{ steps.check.outputs.head-ref }}
+    
+    steps:
+      - name: Check if PR is ready for checks
+        id: check
+        run: |
+          if [[ "${{ github.event.pull_request.draft }}" == "true" && "${{ github.event.action }}" != "ready_for_review" ]]; then
+            echo "should-run=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping checks for draft PR"
+          else
+            echo "should-run=true" >> $GITHUB_OUTPUT
+            echo "✅ PR is ready for checks"
+          fi
+          
+          echo "pr-number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "base-ref=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+          echo "head-ref=${{ github.event.pull_request.head.ref }}" >> $GITHUB_OUTPUT
+
+  # Fast quality checks - run first for quick feedback
+  quick-quality-checks:
+    name: Quick Quality Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [check-pr-status]
+    if: needs.check-pr-status.outputs.should-run == 'true'
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies (dev only)
+        run: uv sync --extra dev
+
+      - name: Check code formatting (Black)
+        run: |
+          echo "🎨 Checking code formatting..."
+          uv run black --check --diff src tests
+          echo "✅ Code formatting is correct"
+
+      - name: Quick linting (Ruff)
+        run: |
+          echo "🔍 Running quick linting..."
+          uv run ruff check src tests --select E,F,W
+          echo "✅ Quick linting passed"
+
+      - name: Import sorting check
+        run: |
+          echo "📦 Checking import sorting..."
+          uv run ruff check --select I src tests
+          echo "✅ Import sorting is correct"
+
+  # Comprehensive quality validation
+  comprehensive-quality:
+    name: Comprehensive Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [check-pr-status, quick-quality-checks]
+    if: needs.check-pr-status.outputs.should-run == 'true'
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev --extra test
+
+      - name: Full linting (Ruff)
+        run: |
+          echo "🔍 Running comprehensive linting..."
+          uv run ruff check src tests
+          echo "✅ Comprehensive linting passed"
+
+      - name: Type checking (MyPy)
+        run: |
+          echo "🔍 Running type checking..."
+          uv run mypy src tests
+          echo "✅ Type checking passed"
+
+      - name: Security linting (Bandit)
+        run: |
+          echo "🔒 Running security linting..."
+          uv run bandit -r src/ -f json -o bandit-pr-report.json || true
+          uv run bandit -r src/
+          echo "✅ Security linting completed"
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: pr-security-report
+          path: bandit-pr-report.json
+
+  # Unit tests with coverage
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [check-pr-status]
+    if: needs.check-pr-status.outputs.should-run == 'true'
+    
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev --extra test
+          # Install external tools for testing
+          sudo apt-get update
+          sudo apt-get install -y ripgrep fd-find tree-sitter-cli
+
+      - name: Run unit tests with coverage
+        run: |
+          echo "🧪 Running unit tests with coverage..."
+          uv run pytest tests/unit/ \
+            --cov=src/repoindex \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --cov-fail-under=80 \
+            --junitxml=junit-pr-results.xml \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        if: matrix.python-version == '3.11'
+        with:
+          file: ./coverage.xml
+          flags: unittests,pr
+          name: pr-coverage
+          fail_ci_if_error: false
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: pr-test-results-${{ matrix.python-version }}
+          path: |
+            junit-pr-results.xml
+            htmlcov/
+
+  # Integration tests (lighter version for PRs)
+  integration-tests-lite:
+    name: Integration Tests (Lite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [check-pr-status, unit-tests]
+    if: needs.check-pr-status.outputs.should-run == 'true'
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev --extra test
+          sudo apt-get update
+          sudo apt-get install -y ripgrep fd-find tree-sitter-cli git
+
+      - name: Setup test environment
+        run: |
+          mkdir -p /tmp/pr-test-repos
+          cd /tmp/pr-test-repos
+          git config --global user.email "test@pr.mimir"
+          git config --global user.name "PR Test"
+          
+          # Create small test repository
+          git init test-repo
+          cd test-repo
+          echo "# PR Test Repository" > README.md
+          echo "console.log('pr test');" > app.js
+          git add .
+          git commit -m "PR test commit"
+
+      - name: Run integration tests (selected)
+        env:
+          TEST_REPO_PATH: /tmp/pr-test-repos/test-repo
+          MIMIR_TEST_MODE: "true"
+          MIMIR_OPENAI_API_KEY: "test-key-not-real"
+        run: |
+          echo "🔗 Running selected integration tests for PR..."
+          uv run pytest tests/integration/test_simple_integration.py \
+            --junitxml=integration-pr-results.xml \
+            -v \
+            --timeout=180
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: pr-integration-results
+          path: integration-pr-results.xml
+
+  # Build validation
+  build-validation:
+    name: Build Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [check-pr-status]
+    if: needs.check-pr-status.outputs.should-run == 'true'
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: production
+          push: false
+          tags: mimir:pr-${{ github.event.pull_request.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test container startup
+        run: |
+          echo "🐳 Testing container startup..."
+          
+          # Run container and test it starts successfully
+          docker run --name mimir-pr-test -d mimir:pr-${{ github.event.pull_request.number }}
+          
+          # Wait a few seconds for startup
+          sleep 10
+          
+          # Check if container is running
+          if docker ps | grep -q mimir-pr-test; then
+            echo "✅ Container started successfully"
+          else
+            echo "❌ Container failed to start"
+            docker logs mimir-pr-test
+            exit 1
+          fi
+          
+          # Cleanup
+          docker stop mimir-pr-test
+          docker rm mimir-pr-test
+
+  # Security scan for PR changes
+  pr-security-scan:
+    name: PR Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [check-pr-status]
+    if: needs.check-pr-status.outputs.should-run == 'true'
+    
+    permissions:
+      security-events: write
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Semgrep on changed files
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/python
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Check for secrets in PR
+        run: |
+          echo "🔍 Checking for secrets in PR changes..."
+          
+          # Get list of changed files
+          git diff --name-only origin/${{ needs.check-pr-status.outputs.base-ref }}...HEAD > changed-files.txt
+          
+          echo "Changed files:"
+          cat changed-files.txt
+          
+          # Check for potential secrets in changed files
+          SECRET_PATTERNS=(
+            "password.*="
+            "secret.*="
+            "api.*key.*="
+            "token.*="
+            "auth.*="
+          )
+          
+          SECRETS_FOUND=false
+          for pattern in "${SECRET_PATTERNS[@]}"; do
+            if grep -r -i "$pattern" $(cat changed-files.txt) 2>/dev/null; then
+              echo "⚠️  Potential secret pattern found: $pattern"
+              SECRETS_FOUND=true
+            fi
+          done
+          
+          if [ "$SECRETS_FOUND" = true ]; then
+            echo "⚠️  Please review potential secrets in your PR"
+            echo "Consider using environment variables or secret management"
+          else
+            echo "✅ No obvious secrets found in PR changes"
+          fi
+
+  # Performance impact assessment
+  performance-impact:
+    name: Performance Impact
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [check-pr-status, unit-tests]
+    if: needs.check-pr-status.outputs.should-run == 'true' && !cancelled()
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev --extra test
+          sudo apt-get update
+          sudo apt-get install -y ripgrep fd-find tree-sitter-cli
+
+      - name: Run performance tests on PR
+        run: |
+          echo "⚡ Running performance impact assessment..."
+          
+          export MIMIR_TEST_MODE=true
+          export MIMIR_BENCHMARK_MODE=true
+          
+          # Run a subset of performance tests
+          uv run pytest tests/benchmarks/test_performance.py::test_pipeline_performance \
+            --benchmark-only \
+            --benchmark-json=pr-benchmark-results.json \
+            --benchmark-min-rounds=2 \
+            --benchmark-warmup=on \
+            -v || echo "Performance tests completed with issues"
+
+      - name: Analyze performance impact
+        run: |
+          echo "📊 Analyzing performance impact..."
+          
+          if [ -f "pr-benchmark-results.json" ]; then
+            python3 -c "
+            import json
+            try:
+                with open('pr-benchmark-results.json') as f:
+                    data = json.load(f)
+                
+                print('📊 PR Performance Results:')
+                for benchmark in data.get('benchmarks', []):
+                    name = benchmark['name']
+                    mean_time = benchmark['stats']['mean']
+                    print(f'  {name}: {mean_time:.4f}s')
+                
+                # Simple check - flag if any test takes > 3 seconds
+                slow_tests = [b for b in data.get('benchmarks', []) if b['stats']['mean'] > 3.0]
+                if slow_tests:
+                    print('⚠️  Slow performance detected in:')
+                    for test in slow_tests:
+                        print(f'    - {test[\"name\"]}: {test[\"stats\"][\"mean\"]:.4f}s')
+                else:
+                    print('✅ Performance appears acceptable')
+            except Exception as e:
+                print(f'❌ Error analyzing performance results: {e}')
+            "
+          else
+            echo "⚠️  No performance results available"
+          fi
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: pr-performance-results
+          path: pr-benchmark-results.json
+
+  # PR impact analysis
+  pr-impact-analysis:
+    name: PR Impact Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [check-pr-status]
+    if: needs.check-pr-status.outputs.should-run == 'true'
+    
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Analyze PR changes
+        run: |
+          echo "🔍 Analyzing PR impact..."
+          
+          # Get changed files and stats
+          git diff --stat origin/${{ needs.check-pr-status.outputs.base-ref }}...HEAD > pr-stats.txt
+          git diff --name-only origin/${{ needs.check-pr-status.outputs.base-ref }}...HEAD > changed-files.txt
+          
+          echo "📊 PR Statistics:"
+          cat pr-stats.txt
+          
+          echo ""
+          echo "📁 Changed Files:"
+          cat changed-files.txt
+          
+          # Analyze impact areas
+          echo ""
+          echo "🎯 Impact Analysis:"
+          
+          if grep -q "src/repoindex/mcp/" changed-files.txt; then
+            echo "  🔶 MCP Server changes detected - may affect API behavior"
+          fi
+          
+          if grep -q "src/repoindex/pipeline/" changed-files.txt; then
+            echo "  🔶 Pipeline changes detected - may affect processing behavior"
+          fi
+          
+          if grep -q "src/repoindex/security/" changed-files.txt; then
+            echo "  🔶 Security changes detected - requires security review"
+          fi
+          
+          if grep -q "tests/" changed-files.txt; then
+            echo "  🔶 Test changes detected - verify test coverage"
+          fi
+          
+          if grep -q "docker" changed-files.txt || grep -q "Dockerfile" changed-files.txt; then
+            echo "  🔶 Container changes detected - may affect deployment"
+          fi
+          
+          if grep -q ".github/workflows/" changed-files.txt; then
+            echo "  🔶 CI/CD changes detected - may affect pipeline behavior"
+          fi
+          
+          if grep -q "pyproject.toml\|requirements" changed-files.txt; then
+            echo "  🔶 Dependency changes detected - may affect compatibility"
+          fi
+          
+          # Check PR size
+          LINES_CHANGED=$(git diff --shortstat origin/${{ needs.check-pr-status.outputs.base-ref }}...HEAD | grep -o '[0-9]* insertion' | grep -o '[0-9]*' || echo "0")
+          LINES_DELETED=$(git diff --shortstat origin/${{ needs.check-pr-status.outputs.base-ref }}...HEAD | grep -o '[0-9]* deletion' | grep -o '[0-9]*' || echo "0")
+          TOTAL_CHANGES=$((LINES_CHANGED + LINES_DELETED))
+          
+          echo ""
+          echo "📏 PR Size Analysis:"
+          echo "  Lines added: $LINES_CHANGED"
+          echo "  Lines deleted: $LINES_DELETED"
+          echo "  Total changes: $TOTAL_CHANGES"
+          
+          if [ "$TOTAL_CHANGES" -gt 1000 ]; then
+            echo "  ⚠️  Large PR detected - consider breaking into smaller PRs"
+          elif [ "$TOTAL_CHANGES" -gt 500 ]; then
+            echo "  🔶 Medium-sized PR - ensure thorough testing"
+          else
+            echo "  ✅ Reasonably sized PR"
+          fi
+
+      - name: Upload PR analysis
+        uses: actions/upload-artifact@v3
+        with:
+          name: pr-impact-analysis
+          path: |
+            pr-stats.txt
+            changed-files.txt
+
+  # PR summary and status check
+  pr-summary:
+    name: PR Summary
+    runs-on: ubuntu-latest
+    needs: [
+      check-pr-status,
+      quick-quality-checks,
+      comprehensive-quality,
+      unit-tests,
+      integration-tests-lite,
+      build-validation,
+      pr-security-scan,
+      performance-impact,
+      pr-impact-analysis
+    ]
+    if: always() && needs.check-pr-status.outputs.should-run == 'true'
+    
+    steps:
+      - name: Determine overall status
+        id: status
+        run: |
+          # Check if all critical jobs passed
+          if [[ "${{ needs.quick-quality-checks.result }}" == "success" && \
+                "${{ needs.comprehensive-quality.result }}" == "success" && \
+                "${{ needs.unit-tests.result }}" == "success" && \
+                "${{ needs.build-validation.result }}" == "success" ]]; then
+            
+            # Check optional jobs
+            WARNINGS=""
+            if [[ "${{ needs.integration-tests-lite.result }}" != "success" ]]; then
+              WARNINGS="${WARNINGS}Integration tests had issues. "
+            fi
+            if [[ "${{ needs.pr-security-scan.result }}" != "success" ]]; then
+              WARNINGS="${WARNINGS}Security scan had issues. "
+            fi
+            if [[ "${{ needs.performance-impact.result }}" != "success" ]]; then
+              WARNINGS="${WARNINGS}Performance assessment had issues. "
+            fi
+            
+            if [[ -n "$WARNINGS" ]]; then
+              echo "status=success-with-warnings" >> $GITHUB_OUTPUT
+              echo "message=✅ PR checks passed with warnings: $WARNINGS" >> $GITHUB_OUTPUT
+            else
+              echo "status=success" >> $GITHUB_OUTPUT
+              echo "message=✅ All PR checks passed successfully!" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=❌ Some critical PR checks failed. Please review and fix issues." >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create PR summary
+        run: |
+          echo "# 🔍 PR Checks Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**PR #${{ needs.check-pr-status.outputs.pr-number }}**: ${{ needs.check-pr-status.outputs.head-ref }} → ${{ needs.check-pr-status.outputs.base-ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Critical Checks" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Quick Quality | ${{ needs.quick-quality-checks.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Comprehensive Quality | ${{ needs.comprehensive-quality.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ needs.unit-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Validation | ${{ needs.build-validation.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔍 Additional Checks" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration-tests-lite.result == 'success' && '✅ Passed' || needs.integration-tests-lite.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.pr-security-scan.result == 'success' && '✅ Passed' || needs.pr-security-scan.result == 'failure' && '❌ Failed' || '⏭️ Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Performance Impact | ${{ needs.performance-impact.result == 'success' && '✅ Passed' || needs.performance-impact.result == 'failure' && '❌ Issues' || '⏭️ Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Impact Analysis | ${{ needs.pr-impact-analysis.result == 'success' && '✅ Completed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Overall Status**: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR (if first run)
+        if: github.event.action == 'opened'
+        run: |
+          echo "👋 Thank you for contributing to Mimir!"
+          echo ""
+          echo "${{ steps.status.outputs.message }}"
+          echo ""
+          echo "🔍 All PR checks are running. Results will be updated here when complete."
+          echo ""
+          echo "📚 Make sure to:"
+          echo "- [ ] Fill out the PR template completely"
+          echo "- [ ] Add appropriate labels"
+          echo "- [ ] Request reviews from the appropriate team members"
+          echo "- [ ] Ensure all CI checks pass"
+          
+          # In production, this would post a comment to the PR
