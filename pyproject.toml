@@ -1,28 +1,28 @@
 [project]
 name = "repoindex"
-version = "0.1.0"
+version = "1.0.0"
 description = "Deep Code Research System - MCP server for intelligent repository indexing"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=1.0.0",
-    "asyncio-mqtt>=0.16.0",
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "pydantic>=2.5.0",
-    "aiofiles>=23.2.1",
-    "ulid-py>=1.1.0",
-    "tree-sitter>=0.20.4",
-    "tree-sitter-typescript>=0.20.3",
-    "tree-sitter-javascript>=0.20.1",
-    "GitPython>=3.1.40",
-    "msgpack>=1.0.7",
-    "zstandard>=0.22.0",
-    "numpy>=1.24.0",
-    "httpx>=0.25.0",
-    "psutil>=7.0.0",
-    "pytest-benchmark>=5.1.0",
-    "cryptography>=45.0.6",
+    "mcp==1.13.1",
+    "asyncio-mqtt==0.16.2",
+    "fastapi==0.116.1",
+    "uvicorn==0.35.0",
+    "pydantic==2.11.7",
+    "aiofiles==24.1.0",
+    "ulid-py==1.1.0",
+    "tree-sitter==0.25.1",
+    "tree-sitter-typescript==0.23.2",
+    "tree-sitter-javascript==0.23.1",
+    "GitPython==3.1.45",
+    "msgpack==1.1.1",
+    "zstandard==0.24.0",
+    "numpy==2.3.2",
+    "httpx==0.28.1",
+    "psutil==7.0.0",
+    "pytest-benchmark==5.1.0",
+    "cryptography==45.0.6",
 ]
 
 [project.optional-dependencies]

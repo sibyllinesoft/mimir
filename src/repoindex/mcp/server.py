@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server import Server
+from mcp.server.lowlevel.server import NotificationOptions
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 from mcp.types import (
@@ -623,67 +624,67 @@ class MCPServer:
     def _get_index_id_for_repo(self, repo_path: str, revision: str = "HEAD") -> str | None:
         """
         Get existing index ID for a repository if one exists.
-        
+
         Args:
             repo_path: Path to the repository
             revision: Git revision (defaults to HEAD)
-            
+
         Returns:
             Index ID if found, None otherwise
         """
         try:
             # Generate the expected index ID using the same method as _generate_pipeline_id
             expected_index_id = self._generate_pipeline_id(repo_path, revision)
-            
+
             # Check if index directory exists
             index_dir = get_index_directory(self.indexes_dir, expected_index_id)
             manifest_path = index_dir / "manifest.json"
-            
+
             if manifest_path.exists():
                 return expected_index_id
-            
+
         except Exception as e:
             logger.warning(f"Error checking for existing index: {e}")
-            
+
         return None
 
     def _load_index_manifest(self, index_id: str) -> dict[str, Any] | None:
         """
         Load index manifest from storage.
-        
+
         Args:
             index_id: Index identifier
-            
+
         Returns:
             Manifest data if found, None otherwise
         """
         try:
             index_dir = get_index_directory(self.indexes_dir, index_id)
             manifest_path = index_dir / "manifest.json"
-            
+
             if manifest_path.exists():
-                with open(manifest_path, "r") as f:
+                with open(manifest_path) as f:
                     return json.load(f)
-                    
+
         except Exception as e:
             logger.warning(f"Error loading manifest for {index_id}: {e}")
-            
+
         return None
 
     def _generate_pipeline_id(self, repo_path: str, revision: str = "HEAD") -> str:
         """
         Generate pipeline ID for a repository.
-        
+
         Args:
             repo_path: Path to the repository
             revision: Git revision (defaults to HEAD)
-            
+
         Returns:
             Generated pipeline ID
         """
         import hashlib
         from pathlib import Path
-        
+
         # Generate deterministic ID based on repo path and revision
         repo_path_resolved = str(Path(repo_path).resolve())
         id_input = f"{repo_path_resolved}#{revision}"
@@ -708,8 +709,10 @@ async def main() -> None:
             write_stream,
             InitializationOptions(
                 server_name="mimir-repoindex",
-                server_version="0.1.0",
-                capabilities=mcp_server.server.get_capabilities(),
+                server_version="1.0.0",
+                capabilities=mcp_server.server.get_capabilities(
+                    notification_options=NotificationOptions(), experimental_capabilities={}
+                ),
             ),
         )
 

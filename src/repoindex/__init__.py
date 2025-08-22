@@ -5,7 +5,7 @@ A full-Python MCP server for intelligent repository indexing and search.
 Provides zero-prompt local indexing with defensible citations.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __author__ = "Mimir Team"
 __description__ = "Deep Code Research System - MCP server for intelligent repository indexing"
 
