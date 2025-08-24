@@ -1,0 +1,75 @@
+# Mimir Source Distribution Manifest
+# Specifies which files to include in the source distribution
+
+# Include documentation
+include README.md
+include CHANGELOG.md
+include LICENSE*
+include ARCHITECTURE.md
+include SECURITY.md
+include VISION.md
+include API_REFERENCE.md
+include DEPLOYMENT.md
+include DEVELOPMENT.md
+include TROUBLESHOOTING.md
+
+# Include configuration files
+include pyproject.toml
+include docker-compose.yml
+include docker-compose.prod.yml
+include Dockerfile
+include .dockerignore
+
+# Include data schemas
+recursive-include src/repoindex/data/schemas *.json
+
+# Include static UI assets if present
+recursive-include src/repoindex/ui/static *
+
+# Include test files
+recursive-include tests *.py
+
+# Include scripts
+recursive-include scripts *.py *.sh *.bat
+
+# Include operational files
+recursive-include ops *.yml *.yaml *.conf *.json *.md
+
+# Exclude build artifacts and cache
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude *.dylib
+
+# Exclude IDE and version control files
+global-exclude .git*
+global-exclude .vscode
+global-exclude .idea
+global-exclude *.swp
+global-exclude *.swo
+global-exclude *~
+
+# Exclude logs and data directories
+exclude logs/
+exclude data/
+exclude cache/
+exclude dist/
+exclude build/
+exclude *.egg-info/
+
+# Exclude temporary files
+global-exclude *.tmp
+global-exclude *.temp
+global-exclude .pytest_cache
+global-exclude .coverage
+global-exclude htmlcov/
+
+# Exclude lock files (not needed for source distribution)
+exclude uv.lock
+exclude poetry.lock
+exclude Pipfile.lock
+
+# Include important operational scripts
+include scripts/deploy.sh
+include scripts/health-check.sh

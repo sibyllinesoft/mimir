@@ -104,13 +104,13 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 Start the MCP stdio server:
 ```bash
 # Standard server
-uv run python -m repoindex.main mcp
+uv run python -m repoindex.mcp.server
 
 # With security hardening (production)
 uv run python -m repoindex.main_secure mcp
 
 # With custom configuration
-MIMIR_LOG_LEVEL=DEBUG uv run python -m repoindex.main mcp
+MIMIR_LOG_LEVEL=DEBUG uv run python -m repoindex.mcp.server
 ```
 
 **Available MCP Tools:**

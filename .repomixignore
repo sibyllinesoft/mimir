@@ -1,0 +1,131 @@
+# =============================================================================
+# Repomix Bundle Optimization - Exclude Non-Essential Files
+# This dramatically reduces bundle size while preserving core functionality
+# =============================================================================
+
+# Build Artifacts & Distribution
+dist/
+build/
+*.egg-info/
+*.whl
+*.tar.gz
+pyinstaller-config.spec
+MANIFEST
+.eggs/
+wheels/
+
+# Development Dependencies & Lock Files  
+uv.lock
+requirements-pinned.txt
+requirements-dev.txt
+pytest.ini.backup
+
+# Cache & Temporary Files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.benchmarks/
+*.tmp
+*.temp
+temp/
+.tmp/
+
+# Virtual Environments & IDE
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs & Runtime Data
+logs/
+*.log
+*.log.*
+cache/
+data/
+storage/
+var/indexes/
+.serena/
+
+# Test Files & Generated Test Data
+test_*.py
+*_test.py
+tests/
+gemini_test_env/
+
+# Documentation (keep essential docs only)
+CHANGELOG.md
+TROUBLESHOOTING.md
+CI_CD_PIPELINE.md
+DEPLOYMENT.md
+DEVELOPMENT.md
+PERFORMANCE_OPTIMIZATION_REPORT.md
+RELEASE_SUMMARY.md
+TODO.md
+VISION.md
+
+# Operations & Infrastructure
+ops/
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Generated Reports & Output
+repomix-output.xml
+*.benchmark
+benchmark_*.py
+optimized_benchmark.py
+simple_benchmark.py
+
+# Configuration Examples
+.env.example
+repomix.config.json
+
+# Archive & Bundle Files
+*.zst
+*.bundle
+*.zip
+*.tar
+*.gz
+
+# Monitoring & Observability (infrastructure only)
+prometheus/
+grafana/
+alertmanager/
+loki/
+otel/
+
+# Git & Version Control
+.git/
+.github/
+*.orig
+*.bak
+
+# Validation & Setup Scripts (keep core scripts only)
+validate_*.py
+setup_*.py
+*_integration.py
+hello.py
+
+# Large media or binary files that might sneak in
+*.mp4
+*.avi
+*.mov
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx

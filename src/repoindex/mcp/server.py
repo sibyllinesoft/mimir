@@ -76,140 +76,150 @@ class MCPServer:
 
     def _register_tools(self) -> None:
         """Register all MCP tools."""
-
+        # Get tool definitions
+        tools = self._get_tool_definitions()
+        
         @self.server.list_tools()
         async def list_tools() -> list[Tool]:
             """List available indexing tools."""
-            return [
-                Tool(
-                    name="ensure_repo_index",
-                    description="Ensure repository is indexed with full pipeline execution",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "path": {"type": "string", "description": "Path to repository root"},
-                            "rev": {
-                                "type": "string",
-                                "description": "Git revision (defaults to HEAD)",
-                            },
-                            "language": {
-                                "type": "string",
-                                "description": "Primary language (defaults to 'ts')",
-                                "default": "ts",
-                            },
-                            "index_opts": {
-                                "type": "object",
-                                "description": "Additional indexing options",
-                            },
-                        },
-                        "required": ["path"],
-                    },
-                ),
-                Tool(
-                    name="get_repo_bundle",
-                    description="Retrieve complete index bundle for a repository",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "index_id": {"type": "string", "description": "Index identifier"}
-                        },
-                        "required": ["index_id"],
-                    },
-                ),
-                Tool(
-                    name="search_repo",
-                    description="Search repository using hybrid vector + symbol + graph approach",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "index_id": {"type": "string", "description": "Index identifier"},
-                            "query": {"type": "string", "description": "Search query"},
-                            "k": {
-                                "type": "integer",
-                                "description": "Number of results to return",
-                                "default": 20,
-                                "minimum": 1,
-                                "maximum": 100,
-                            },
-                            "features": {
-                                "type": "object",
-                                "description": "Feature flags for search modalities",
-                                "properties": {
-                                    "vector": {"type": "boolean", "default": True},
-                                    "symbol": {"type": "boolean", "default": True},
-                                    "graph": {"type": "boolean", "default": True},
-                                },
-                            },
-                            "context_lines": {
-                                "type": "integer",
-                                "description": "Lines of context around matches",
-                                "default": 5,
-                                "minimum": 0,
-                                "maximum": 20,
-                            },
-                        },
-                        "required": ["index_id", "query"],
-                    },
-                ),
-                Tool(
-                    name="ask_index",
-                    description="Ask complex questions using multi-hop symbol graph reasoning",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "index_id": {"type": "string", "description": "Index identifier"},
-                            "question": {
-                                "type": "string",
-                                "description": "Question to ask about the codebase",
-                            },
-                            "context_lines": {
-                                "type": "integer",
-                                "description": "Lines of context for evidence",
-                                "default": 5,
-                                "minimum": 0,
-                                "maximum": 20,
-                            },
-                        },
-                        "required": ["index_id", "question"],
-                    },
-                ),
-                Tool(
-                    name="cancel",
-                    description="Cancel an ongoing indexing operation",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "index_id": {
-                                "type": "string",
-                                "description": "Index identifier to cancel",
-                            }
-                        },
-                        "required": ["index_id"],
-                    },
-                ),
-            ]
+            return tools
 
         @self.server.call_tool()
         async def call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult:
             """Handle tool calls."""
             try:
-                if name == "ensure_repo_index":
-                    return await self._ensure_repo_index(arguments)
-                elif name == "get_repo_bundle":
-                    return await self._get_repo_bundle(arguments)
-                elif name == "search_repo":
-                    return await self._search_repo(arguments)
-                elif name == "ask_index":
-                    return await self._ask_index(arguments)
-                elif name == "cancel":
-                    return await self._cancel(arguments)
-                else:
+                handler = self._get_tool_handler(name)
+                if not handler:
                     raise ValueError(f"Unknown tool: {name}")
+                
+                return await handler(arguments)
             except Exception as e:
                 logger.exception(f"Error in tool {name}: {e}")
                 return CallToolResult(
                     content=[TextContent(type="text", text=f"Error: {str(e)}")], isError=True
                 )
+
+    def _get_tool_definitions(self) -> list[Tool]:
+        """Get standardized tool definitions."""
+        return [
+            Tool(
+                name="ensure_repo_index",
+                description="Ensure repository is indexed with full pipeline execution",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Path to repository root"},
+                        "rev": {
+                            "type": "string",
+                            "description": "Git revision (defaults to HEAD)",
+                        },
+                        "language": {
+                            "type": "string",
+                            "description": "Primary language (defaults to 'ts')",
+                            "default": "ts",
+                        },
+                        "index_opts": {
+                            "type": "object",
+                            "description": "Additional indexing options",
+                        },
+                    },
+                    "required": ["path"],
+                },
+            ),
+            Tool(
+                name="get_repo_bundle",
+                description="Retrieve complete index bundle for a repository",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "index_id": {"type": "string", "description": "Index identifier"}
+                    },
+                    "required": ["index_id"],
+                },
+            ),
+            Tool(
+                name="search_repo",
+                description="Search repository using hybrid vector + symbol + graph approach",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "index_id": {"type": "string", "description": "Index identifier"},
+                        "query": {"type": "string", "description": "Search query"},
+                        "k": {
+                            "type": "integer",
+                            "description": "Number of results to return",
+                            "default": 20,
+                            "minimum": 1,
+                            "maximum": 100,
+                        },
+                        "features": {
+                            "type": "object",
+                            "description": "Feature flags for search modalities",
+                            "properties": {
+                                "vector": {"type": "boolean", "default": True},
+                                "symbol": {"type": "boolean", "default": True},
+                                "graph": {"type": "boolean", "default": True},
+                            },
+                        },
+                        "context_lines": {
+                            "type": "integer",
+                            "description": "Lines of context around matches",
+                            "default": 5,
+                            "minimum": 0,
+                            "maximum": 20,
+                        },
+                    },
+                    "required": ["index_id", "query"],
+                },
+            ),
+            Tool(
+                name="ask_index",
+                description="Ask complex questions using multi-hop symbol graph reasoning",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "index_id": {"type": "string", "description": "Index identifier"},
+                        "question": {
+                            "type": "string",
+                            "description": "Question to ask about the codebase",
+                        },
+                        "context_lines": {
+                            "type": "integer",
+                            "description": "Lines of context for evidence",
+                            "default": 5,
+                            "minimum": 0,
+                            "maximum": 20,
+                        },
+                    },
+                    "required": ["index_id", "question"],
+                },
+            ),
+            Tool(
+                name="cancel",
+                description="Cancel an ongoing indexing operation",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "index_id": {
+                            "type": "string",
+                            "description": "Index identifier to cancel",
+                        }
+                    },
+                    "required": ["index_id"],
+                },
+            ),
+        ]
+
+    def _get_tool_handler(self, name: str):
+        """Get handler function for a tool."""
+        handlers = {
+            "ensure_repo_index": self._ensure_repo_index,
+            "get_repo_bundle": self._get_repo_bundle,
+            "search_repo": self._search_repo,
+            "ask_index": self._ask_index,
+            "cancel": self._cancel,
+        }
+        return handlers.get(name)
 
     def _register_resources(self) -> None:
         """Register MCP resources for status and artifacts."""

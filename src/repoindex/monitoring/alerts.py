@@ -628,7 +628,6 @@ def webhook_notification_handler(webhook_url: str):
 
     def handler(alert: Alert):
         try:
-
             import requests
 
             payload = {"alert": alert.to_dict(), "timestamp": datetime.now().isoformat()}

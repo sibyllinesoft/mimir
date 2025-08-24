@@ -604,9 +604,7 @@ class IndexEncryption:
 
         return results
 
-    def decrypt_vector_index(
-        self, index_dir: Path, password: str | None = None
-    ) -> dict[str, Any]:
+    def decrypt_vector_index(self, index_dir: Path, password: str | None = None) -> dict[str, Any]:
         """Decrypt a vector index directory.
 
         Args:

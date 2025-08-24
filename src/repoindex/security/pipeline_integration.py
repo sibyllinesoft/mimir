@@ -14,18 +14,19 @@ from typing import Any
 
 from ..data.schemas import PipelineStage
 from ..util.log import get_logger
-from .audit import get_security_auditor
-from .auth import SecurityEvent, SecurityEventType
+from .audit import SecurityEvent, SecurityEventType, get_security_auditor
 from .config import SecurityConfig, get_security_config
 from .crypto import CryptoManager, IndexEncryption
-from .sandbox import ProcessIsolator, ResourceLimiter, SandboxExecutionError
+from .sandbox import ProcessIsolator, ResourceLimiter, SandboxViolation
 from .secrets import CredentialScanner
 from .validation import (
     ContentValidator,
     PathValidator,
     SchemaValidator,
-    SecurityValidationError,
     ValidationContext,
+)
+from .validation import (
+    SecurityViolation as SecurityValidationError,
 )
 
 logger = get_logger(__name__)
@@ -119,7 +120,6 @@ class SecureFileDiscovery:
                             self.security_config.enable_credential_scanning
                             and self._should_scan_file(file_path)
                         ):
-
                             # Read file content for scanning
                             try:
                                 content = await asyncio.to_thread(
@@ -470,7 +470,7 @@ class SecurePipelineContext:
 
             return result
 
-        except SandboxExecutionError as e:
+        except SandboxViolation as e:
             # Record sandbox violation
             self.security_auditor.record_event(
                 SecurityEvent(
@@ -834,9 +834,7 @@ def create_secure_pipeline(original_pipeline, security_config: SecurityConfig | 
     return SecurityPipelineWrapper(original_pipeline, security_config)
 
 
-def create_secure_file_discovery(
-    original_discovery, security_config: SecurityConfig | None = None
-):
+def create_secure_file_discovery(original_discovery, security_config: SecurityConfig | None = None):
     """Create security-enhanced version of file discovery.
 
     Args:

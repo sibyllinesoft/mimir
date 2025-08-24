@@ -36,21 +36,9 @@ services:
     
     # Production volumes with specific mount options
     volumes:
-      - type: bind
-        source: ${MIMIR_DATA_PATH:-/var/lib/mimir/data}
-        target: /app/data
-        bind:
-          propagation: shared
-      - type: bind
-        source: ${MIMIR_CACHE_PATH:-/var/lib/mimir/cache}
-        target: /app/cache
-        bind:
-          propagation: shared
-      - type: bind
-        source: ${MIMIR_LOGS_PATH:-/var/log/mimir}
-        target: /app/logs
-        bind:
-          propagation: shared
+      - ${MIMIR_DATA_PATH:-./data}:/app/data
+      - ${MIMIR_CACHE_PATH:-./cache}:/app/cache
+      - ${MIMIR_LOGS_PATH:-./logs}:/app/logs
     
     # Enhanced health check for production
     healthcheck:
@@ -75,6 +63,8 @@ services:
       - CHOWN
       - SETUID
       - SETGID
+    security_opt:
+      - no-new-privileges:true
 
   # Production UI with reverse proxy ready configuration
   mimir-ui:
@@ -97,6 +87,17 @@ services:
         reservations:
           memory: 256M
           cpus: '0.5'
+    
+    # Enhanced security for production
+    security_opt:
+      - no-new-privileges:true
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Production Redis with persistence and clustering ready
   redis:
@@ -121,6 +122,13 @@ services:
         reservations:
           memory: 128M
           cpus: '0.2'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # NGINX Reverse Proxy for production
   nginx:
@@ -189,6 +197,13 @@ services:
       - '--web.enable-admin-api'
       - '--log.level=warn'
     
+    # Health check for production
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
     # Resource limits
     deploy:
       resources:
@@ -198,6 +213,10 @@ services:
         reservations:
           memory: 256M
           cpus: '0.25'
+    
+    # Security configuration
+    security_opt:
+      - no-new-privileges:true
 
   # Grafana for visualization
   grafana:
@@ -230,6 +249,10 @@ services:
         reservations:
           memory: 128M
           cpus: '0.1'
+    
+    # Security configuration
+    security_opt:
+      - no-new-privileges:true
     
     # Dependencies
     depends_on:
@@ -267,6 +290,10 @@ services:
         reservations:
           memory: 128M
           cpus: '0.1'
+    
+    # Security configuration
+    security_opt:
+      - no-new-privileges:true
     
     # Network
     networks:

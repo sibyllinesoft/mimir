@@ -367,31 +367,41 @@ class ErrorCollector:
 def create_error_context(component: str, operation: str, **kwargs) -> ErrorContext:
     """Create error context with automatic stack frame detection."""
     import inspect
-    import platform
-    import sys
-
-    import psutil
+    
+    # Use platform utilities for system information
+    from .platform import get_platform_context
 
     frame = inspect.currentframe()
     if frame and frame.f_back:
         caller_frame = frame.f_back
+        platform_info = get_platform_context()
+        
         context = ErrorContext(
             component=component,
             operation=operation,
             file_path=caller_frame.f_code.co_filename,
             line_number=caller_frame.f_lineno,
             function_name=caller_frame.f_code.co_name,
-            python_version=sys.version,
-            platform=platform.platform(),
+            python_version=platform_info["python_version"],
+            platform=f"{platform_info['platform']} ({platform_info['architecture']})",
             **kwargs,
         )
 
         # Add system metrics if available
         try:
+            import psutil
             process = psutil.Process()
             context.memory_usage = process.memory_info().rss
-            context.disk_usage = psutil.disk_usage("/").used
-        except:
+            
+            # Use platform-aware disk usage check
+            from .platform import is_windows, get_temp_directory
+            if is_windows():
+                # On Windows, use the temp directory for disk usage
+                context.disk_usage = psutil.disk_usage(str(get_temp_directory())).used
+            else:
+                context.disk_usage = psutil.disk_usage("/").used
+                
+        except Exception:
             pass  # Ignore if psutil not available or permission denied
 
         return context

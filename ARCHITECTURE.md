@@ -13,6 +13,18 @@ Mimir is a full-Python, stdio MCP server that provides intelligent code indexing
 5. **Incremental processing**: Smart caching and delta detection
 6. **Robust monorepo support**: Handles large codebases efficiently
 
+## Architectural Diagrams
+
+For visual understanding of the system architecture, see the comprehensive diagrams in the `/docs/diagrams/` directory:
+
+- **[System Architecture](docs/diagrams/system-architecture.md)**: Complete system overview showing all components, data flow, and interactions between layers
+- **[Pipeline Flow](docs/diagrams/pipeline-flow.md)**: Detailed six-stage pipeline execution flow with dependencies, error handling, and progress tracking
+- **[Security Model](docs/diagrams/security-model.md)**: Comprehensive security architecture including authentication, authorization, sandboxing, and audit logging
+- **[MCP Protocol](docs/diagrams/mcp-protocol.md)**: MCP protocol interaction sequences, tool specifications, and real-time communication patterns
+- **[Platform Abstraction](docs/diagrams/platform-abstraction.md)**: Cross-platform compatibility layer for Windows, macOS, and Linux support
+
+These diagrams provide essential visual context for understanding the system design, security model, and operational flows described in this document.
+
 ## Technical Stack & Dependencies
 
 ### Core Runtime

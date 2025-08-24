@@ -907,7 +907,7 @@ class UIServer:
                     const statusClass = run.status.toLowerCase();
                     const progress = run.progress || 0;
                     const createdDate = new Date(run.created_at).toLocaleString();
-                    
+
                     html += `
                         <div class="run-item">
                             <div class="run-header">
@@ -1011,7 +1011,7 @@ class UIServer:
             }
         }
 
-        // Ask functionality  
+        // Ask functionality
         async function askQuestion() {
             const question = document.getElementById('ask-question').value;
             if (!question.trim()) return;

@@ -218,7 +218,8 @@ class GitRepository:
                     if isinstance(workspace_patterns, dict):
                         workspace_patterns = workspace_patterns.get("packages", [])
 
-                    # TODO: Expand workspace patterns to find actual workspace dirs
+                    # NOTE: Future enhancement - expand glob patterns to resolve actual workspace directories
+                    # Current implementation returns workspace patterns as-is for basic support
                     for pattern in workspace_patterns:
                         workspaces.append({"name": pattern, "path": pattern, "type": "npm"})
             except (OSError, json.JSONDecodeError):

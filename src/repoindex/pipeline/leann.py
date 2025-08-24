@@ -251,7 +251,6 @@ class LEANNAdapter:
                 and "{" in stripped
                 or ":" in stripped
             ):
-
                 # Start new function
                 if current_function:
                     chunk = await self._create_chunk_from_lines(
