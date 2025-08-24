@@ -1,0 +1,457 @@
+# Mimir Deep Code Research System - Dependency Management Workflow
+# Automated dependency updates, security scanning, and maintenance
+
+name: Dependency Management
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC for security updates
+    - cron: '0 6 * * *'
+    # Run weekly on Sundays at 8 AM UTC for general updates
+    - cron: '0 8 * * 0'
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Type of dependency updates to perform'
+        required: true
+        default: 'security'
+        type: choice
+        options:
+          - security
+          - minor
+          - all
+      create_pr:
+        description: 'Create pull request for updates'
+        required: false
+        default: true
+        type: boolean
+      auto_merge_security:
+        description: 'Auto-merge critical security updates'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_VERSION: "0.1.31"
+
+jobs:
+  # Daily security scanning
+  security-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install security scanning dependencies
+        run: |
+          uv sync --extra dev --extra security
+          # Install additional security tools
+          uv add bandit safety pip-audit semgrep --group security-scan
+
+      - name: Run comprehensive security audit
+        run: |
+          echo "🔍 Starting comprehensive dependency security audit..."
+          python scripts/deps/deps-scan.py --report-format json --severity medium --output security_audit_$(date +%Y%m%d).json
+          
+          # Also run individual scans for detailed reporting
+          uv run bandit -r src/ -f json -o bandit_audit_$(date +%Y%m%d).json
+          uv run safety check --json --output safety_audit_$(date +%Y%m%d).json || true
+          uv run pip-audit --format json --output pip_audit_$(date +%Y%m%d).json || true
+
+      - name: Run comprehensive dependency audit
+        if: github.event.schedule == '0 8 * * 0' || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "📋 Running comprehensive dependency audit..."
+          python scripts/deps/deps-audit.py --format json --check-licenses --analyze-bloat --output dependency_audit_$(date +%Y%m%d).json
+
+      - name: Validate lock files
+        run: |
+          echo "🔒 Validating dependency lock files..."
+          python scripts/deps/deps-lock.py --validate --check-platform --output lock_validation_$(date +%Y%m%d).txt
+
+      - name: Check for critical vulnerabilities
+        id: vuln_check
+        run: |
+          # Parse security scan results to check for critical vulnerabilities
+          if [ -f "security_audit_$(date +%Y%m%d).json" ]; then
+            CRITICAL_COUNT=$(python -c "
+            import json
+            with open('security_audit_$(date +%Y%m%d).json') as f:
+                data = json.load(f)
+            summary = data.get('summary', {})
+            critical_issues = summary.get('critical_issues_count', 0)
+            total_vulns = summary.get('total_vulnerabilities', 0)
+            print(f'critical_issues={critical_issues}')
+            print(f'total_vulnerabilities={total_vulns}')
+            if critical_issues > 0 or total_vulns > 0:
+                print('has_security_issues=true')
+            else:
+                print('has_security_issues=false')
+            " | tee -a $GITHUB_OUTPUT)
+            
+            echo "Security scan completed. Check outputs for results."
+          else
+            echo "has_security_issues=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create security issue for critical vulnerabilities
+        if: steps.vuln_check.outputs.has_security_issues == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const title = `🚨 Critical Security Vulnerabilities Detected - ${new Date().toISOString().split('T')[0]}`;
+            const body = `
+            ## Security Alert
+            
+            Our automated dependency security scan has detected critical vulnerabilities in the Mimir project dependencies.
+            
+            **Scan Date:** ${new Date().toISOString()}
+            **Critical Issues:** ${{ steps.vuln_check.outputs.critical_issues }}
+            **Total Vulnerabilities:** ${{ steps.vuln_check.outputs.total_vulnerabilities }}
+            
+            ## Action Required
+            
+            1. Review the security scan reports in the workflow artifacts
+            2. Update vulnerable dependencies immediately
+            3. Test the updates thoroughly
+            4. Deploy security updates to production
+            
+            ## Workflow Run
+            
+            [View detailed scan results](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ## Automated Actions
+            
+            - [ ] Security scan completed
+            - [ ] Dependencies updated
+            - [ ] Tests passing
+            - [ ] Security review completed
+            - [ ] Updates deployed
+            
+            This issue was automatically created by the Dependency Management workflow.
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['security', 'dependencies', 'critical']
+            });
+
+      - name: Upload audit reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-audit-reports-${{ github.run_number }}
+          path: |
+            security_audit_*.json
+            dependency_audit_*.json
+            lock_validation_*.txt
+            bandit_audit_*.json
+            safety_audit_*.json
+            pip_audit_*.json
+          retention-days: 30
+
+  # Automated dependency updates
+  dependency-updates:
+    name: Dependency Updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: security-audit
+    if: github.event.schedule == '0 8 * * 0' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Dependency Update Bot"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev --extra security
+          # Install update tools
+          uv add safety pip-audit --group security-scan
+
+      - name: Determine update strategy
+        id: update_strategy
+        run: |
+          UPDATE_TYPE="${{ github.event.inputs.update_type || 'security' }}"
+          CREATE_PR="${{ github.event.inputs.create_pr || 'true' }}"
+          AUTO_MERGE="${{ github.event.inputs.auto_merge_security || 'false' }}"
+          
+          echo "update_type=${UPDATE_TYPE}" >> $GITHUB_OUTPUT
+          echo "create_pr=${CREATE_PR}" >> $GITHUB_OUTPUT
+          echo "auto_merge_security=${AUTO_MERGE}" >> $GITHUB_OUTPUT
+          
+          # Determine flags for update script
+          UPDATE_FLAGS=""
+          if [ "$UPDATE_TYPE" = "security" ]; then
+            UPDATE_FLAGS="--security-only"
+          fi
+          
+          if [ "$CREATE_PR" = "true" ]; then
+            UPDATE_FLAGS="$UPDATE_FLAGS --create-pr"
+          fi
+          
+          if [ "$AUTO_MERGE" = "true" ]; then
+            UPDATE_FLAGS="$UPDATE_FLAGS --auto-merge-security"
+          fi
+          
+          echo "update_flags=${UPDATE_FLAGS}" >> $GITHUB_OUTPUT
+
+      - name: Run dependency updates
+        id: updates
+        run: |
+          echo "🔄 Running dependency updates with strategy: ${{ steps.update_strategy.outputs.update_type }}"
+          
+          # Create update branch
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          BRANCH_NAME="deps/automated-updates-${TIMESTAMP}"
+          git checkout -b "${BRANCH_NAME}"
+          
+          # Run update script
+          python scripts/deps/deps-update.py ${{ steps.update_strategy.outputs.update_flags }} 2>&1 | tee update_log.txt
+          
+          # Check if any files were changed
+          if git diff --quiet; then
+            echo "No dependency updates available"
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+          else
+            echo "Dependencies updated successfully"
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "branch_name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+            
+            # Show what changed
+            git status
+            git diff --name-only
+            
+            # Commit changes
+            git add -A
+            git commit -m "chore(deps): automated dependency updates
+
+            Update type: ${{ steps.update_strategy.outputs.update_type }}
+            Timestamp: ${TIMESTAMP}
+            
+            Generated by Dependency Management workflow
+            Run ID: ${{ github.run_id }}"
+          fi
+
+      - name: Run tests after updates
+        if: steps.updates.outputs.has_updates == 'true'
+        run: |
+          echo "🧪 Running tests after dependency updates..."
+          
+          # Install updated dependencies
+          uv sync --extra dev --extra test
+          
+          # Run critical tests
+          uv run pytest tests/unit/ -v --tb=short
+          
+          # Run security scan on updated dependencies
+          python scripts/deps/deps-scan.py --report-format text --severity high
+
+      - name: Push updates and create PR
+        if: steps.updates.outputs.has_updates == 'true' && steps.update_strategy.outputs.create_pr == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH_NAME="${{ steps.updates.outputs.branch_name }}"
+          
+          # Push the branch
+          git push origin "${BRANCH_NAME}"
+          
+          # Create PR
+          PR_TITLE="chore(deps): automated dependency updates - $(date +%Y-%m-%d)"
+          PR_BODY="## Automated Dependency Updates
+          
+          This PR contains automated dependency updates generated by the Dependency Management workflow.
+          
+          **Update Type:** ${{ steps.update_strategy.outputs.update_type }}
+          **Generated:** $(date -Iseconds)
+          **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ## Changes Made
+          
+          - 🔄 Updated dependencies based on ${{ steps.update_strategy.outputs.update_type }} policy
+          - 🔒 Validated security status of all updates
+          - ✅ Verified tests pass with updated dependencies
+          - 📋 Generated dependency audit reports
+          
+          ## Testing
+          
+          - [x] Unit tests passing
+          - [x] Security scan completed
+          - [ ] Integration tests (will run in PR)
+          - [ ] Manual review recommended for major updates
+          
+          ## Security Notes
+          
+          All dependency updates have been scanned for known vulnerabilities.
+          Critical security updates are marked with high priority.
+          
+          ## Auto-merge Policy
+          
+          - Critical security updates: ${{ steps.update_strategy.outputs.auto_merge_security == 'true' && 'Enabled' || 'Disabled' }}
+          - Minor updates: Manual review required
+          - Major updates: Manual review required
+          
+          This PR was automatically created by the Dependency Management workflow.
+          Review the changes and approve if everything looks correct.
+          "
+          
+          # Create the PR using gh CLI or API
+          gh pr create --title "${PR_TITLE}" --body "${PR_BODY}" --base main --head "${BRANCH_NAME}" --label "dependencies,automated"
+
+      - name: Auto-merge security updates
+        if: steps.updates.outputs.has_updates == 'true' && steps.update_strategy.outputs.auto_merge_security == 'true' && steps.update_strategy.outputs.update_type == 'security'
+        env:
+          GITHUB_TOKEN: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔄 Auto-merging critical security updates..."
+          
+          # Wait a moment for PR to be fully created
+          sleep 10
+          
+          # Enable auto-merge on the PR
+          BRANCH_NAME="${{ steps.updates.outputs.branch_name }}"
+          PR_NUMBER=$(gh pr list --head "${BRANCH_NAME}" --json number --jq '.[0].number')
+          
+          if [ ! -z "$PR_NUMBER" ]; then
+            gh pr merge $PR_NUMBER --auto --squash --delete-branch
+            echo "✅ Auto-merge enabled for security update PR #${PR_NUMBER}"
+          else
+            echo "❌ Could not find PR for auto-merge"
+          fi
+
+      - name: Upload update reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-updates-${{ github.run_number }}
+          path: |
+            update_log.txt
+            dependency_update_report_*.txt
+            security_scan_report_*.json
+          retention-days: 30
+
+  # Weekly dependency health report
+  dependency-health-report:
+    name: Dependency Health Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event.schedule == '0 8 * * 0' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev --extra security
+
+      - name: Generate comprehensive health report
+        run: |
+          echo "📊 Generating weekly dependency health report..."
+          
+          # Run comprehensive audit
+          python scripts/deps/deps-audit.py --format text --check-licenses --analyze-bloat --output weekly_health_report_$(date +%Y%m%d).txt
+          
+          # Run security scan
+          python scripts/deps/deps-scan.py --report-format text --output weekly_security_report_$(date +%Y%m%d).txt
+          
+          # Validate lock files
+          python scripts/deps/deps-lock.py --validate --check-platform --output weekly_lock_report_$(date +%Y%m%d).txt
+
+      - name: Create weekly summary issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Find report files
+            const files = fs.readdirSync('.');
+            const reportFiles = files.filter(f => f.includes('weekly_') && f.includes('report_'));
+            
+            let reportSummary = '## 📊 Weekly Dependency Health Report\\n\\n';
+            reportSummary += `**Report Date:** ${new Date().toISOString().split('T')[0]}\\n`;
+            reportSummary += `**Generated by:** [Workflow Run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\\n\\n`;
+            
+            reportSummary += '### 📋 Reports Generated\\n\\n';
+            reportFiles.forEach(file => {
+              reportSummary += `- 📄 ${file}\\n`;
+            });
+            
+            reportSummary += '\\n### 🔍 Key Metrics\\n\\n';
+            reportSummary += '- 🔒 Security vulnerabilities: Check security report\\n';
+            reportSummary += '- ⚖️ License compliance: Check audit report\\n';
+            reportSummary += '- 📦 Package health: Check audit report\\n';
+            reportSummary += '- 🔐 Lock file integrity: Check lock report\\n';
+            
+            reportSummary += '\\n### 📁 Artifacts\\n\\n';
+            reportSummary += 'Detailed reports are available in the workflow artifacts.\\n';
+            reportSummary += 'Download them from the workflow run link above.\\n';
+            
+            reportSummary += '\\n### 🤖 Automation Status\\n\\n';
+            reportSummary += '- [x] Weekly health check completed\\n';
+            reportSummary += '- [x] Security scan completed\\n';
+            reportSummary += '- [x] License compliance checked\\n';
+            reportSummary += '- [x] Lock files validated\\n';
+            
+            reportSummary += '\\n---\\n*This report was automatically generated by the Dependency Management workflow.*';
+            
+            // Create or update the issue
+            const issueTitle = `📊 Weekly Dependency Health Report - ${new Date().toISOString().split('T')[0]}`;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: reportSummary,
+              labels: ['dependencies', 'health-report', 'automated']
+            });
+
+      - name: Upload weekly reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: weekly-dependency-reports-${{ github.run_number }}
+          path: |
+            weekly_*_report_*.txt
+          retention-days: 60

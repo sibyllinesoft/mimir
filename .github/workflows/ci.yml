@@ -298,8 +298,12 @@ jobs:
           uv run bandit -r src/ -f json -o bandit-report.json || true
           uv run bandit -r src/ -f txt
 
-      - name: Dependency vulnerability scan
+      - name: Comprehensive dependency security scan
         run: |
+          # Run our comprehensive dependency scanner
+          python scripts/deps/deps-scan.py --report-format json --output security_scan_report.json
+          
+          # Legacy safety scan for compatibility
           uv run safety check --json --output safety-report.json || true
           uv run safety check
 
@@ -312,6 +316,11 @@ jobs:
             p/python
         continue-on-error: true
 
+      - name: Dependency lock file validation
+        run: |
+          # Validate dependency lock files
+          python scripts/deps/deps-lock.py --validate --check-platform
+
       - name: Upload security reports
         uses: actions/upload-artifact@v3
         if: always()
@@ -320,6 +329,9 @@ jobs:
           path: |
             bandit-report.json
             safety-report.json
+            security_scan_report.json
+            dependency_audit_report_*.json
+            lock_file_report_*.txt
 
   # Container building and scanning
   build-container:

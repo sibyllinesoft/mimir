@@ -1,70 +1,95 @@
 # Dependabot configuration for Mimir Deep Code Research System
-# Automated dependency updates with security focus
+# Enhanced automated dependency updates with comprehensive security focus
+# Complements the custom dependency management workflows
 
 version: 2
 updates:
-  # Python dependencies
+  # Python dependencies with enhanced security grouping
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
+      interval: "daily"
+      time: "05:00"
       timezone: "UTC"
-    target-branch: "develop"
-    open-pull-requests-limit: 10
+    target-branch: "main"
+    open-pull-requests-limit: 8
     reviewers:
-      - "@mimir-maintainers"
+      - "mimir-dev-team"
     assignees:
-      - "@security-team"
+      - "mimir-dev-team"
     commit-message:
-      prefix: "deps"
+      prefix: "chore(deps)"
       include: "scope"
     labels:
       - "dependencies"
       - "python"
-      - "security"
-    # Group related updates
+      - "dependabot"
+    # Enhanced dependency grouping for better management
     groups:
-      security-updates:
+      critical-security:
         patterns:
-          - "*"
+          - "cryptography*"
+          - "fastapi*"
+          - "pydantic*"
+          - "uvicorn*"
+          - "httpx*"
+          - "jinja2*"
         update-types:
-          - "security-update"
-      testing-deps:
+          - "security"
+        priority: 10
+      development-tools:
         patterns:
           - "pytest*"
-          - "*test*"
-          - "coverage*"
-          - "mock*"
-      dev-deps:
-        patterns:
-          - "black"
-          - "ruff"
-          - "mypy"
-          - "pre-commit"
-      fastapi-ecosystem:
+          - "black*"
+          - "ruff*"
+          - "mypy*"
+          - "pre-commit*"
+          - "bandit*"
+          - "safety*"
+          - "pip-audit*"
+        update-types:
+          - "minor"
+          - "patch"
+      web-framework:
         patterns:
           - "fastapi*"
           - "uvicorn*"
           - "pydantic*"
           - "starlette*"
-    # Security updates get higher priority
-    priority-security-updates: true
-    # Allow version upgrades
+        update-types:
+          - "minor"
+          - "patch"
+      ai-ml-stack:
+        patterns:
+          - "google-generativeai*"
+          - "numpy*"
+        update-types:
+          - "minor"
+          - "patch"
+      code-analysis:
+        patterns:
+          - "tree-sitter*"
+          - "GitPython*"
+          - "msgpack*"
+        update-types:
+          - "patch"
+    # Enhanced security policies
     allow:
+      - dependency-type: "direct"
+        update-type: "security"
+      - dependency-type: "indirect"
+        update-type: "security"
       - dependency-type: "direct"
         update-type: "version-update:semver-patch"
       - dependency-type: "direct"
         update-type: "version-update:semver-minor"
-      - dependency-type: "indirect"
-        update-type: "security-update"
-    # Ignore specific packages if needed
+    # Controlled major version updates
     ignore:
-      # Pin specific versions that need manual review
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]
       - dependency-name: "tree-sitter*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "google-generativeai"
         update-types: ["version-update:semver-major"]
 
   # Docker dependencies
