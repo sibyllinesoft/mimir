@@ -43,7 +43,8 @@ Mimir is a full-Python, stdio MCP server that provides intelligent code indexing
 - **ULID-based index identifiers** for unique operation tracking
 - **Graceful degradation** when stages fail
 
-#### `tools.py` - MCP Tool Handlers
+#### Tool Handlers (within server.py)
+The MCP tools are implemented as async handlers within the server class:
 ```python
 async def ensure_repo_index(
     path: str,
@@ -79,21 +80,154 @@ async def ask_index(
 - Human-readable logs in Markdown format
 - Compressed bundle artifacts (tar.zst)
 
-### 2. Pipeline Orchestration (`src/repoindex/pipeline/`)
+### 2. Architectural Separation: Indexing vs Querying
 
-#### `run.py` - Async Pipeline Controller
+**Major Architectural Improvement (v1.1+)**: Mimir now implements a clean separation between indexing and querying concerns, following the Single Responsibility Principle for improved maintainability and extensibility.
+
+#### Design Philosophy
+
+**Before**: Single `IndexingPipeline` class handled both indexing operations AND querying operations, violating SRP.
+
+**After**: Clean separation into dedicated components:
+- **IndexingPipeline** (`pipeline/run.py`) - Pure indexing operations
+- **QueryEngine** (`pipeline/query_engine.py`) - Pure querying operations
+- **MCP Server** - Orchestrates both components with clean integration
+
+#### `query_engine.py` - Query Operations Engine
+
+```python
+class QueryEngine:
+    """Dedicated engine for all querying operations against indexed repositories."""
+    
+    def register_indexed_repository(self, indexed_repo: IndexedRepository):
+        """Register completed index for querying operations"""
+        
+    async def search(
+        self, index_id: str, query: str, k: int = 20, 
+        features: FeatureConfig = FeatureConfig(), context_lines: int = 5
+    ) -> SearchResponse:
+        """Execute hybrid search: vector + symbol + graph"""
+        
+    async def ask(
+        self, index_id: str, question: str, context_lines: int = 5
+    ) -> AskResponse:
+        """Execute multi-hop symbol graph reasoning"""
+```
+
+#### `IndexedRepository` - Data Container
+
+```python
+class IndexedRepository:
+    """Immutable container holding all artifacts from completed indexing pipeline."""
+    
+    index_id: str
+    repo_root: str  
+    rev: str
+    serena_graph: SerenaGraph | None      # Symbol graph data
+    vector_index: Any | None              # LEANN embeddings
+    repomap_data: Any | None              # Repository structure
+    snippets: Any | None                  # Code snippets
+    manifest: IndexManifest | None        # Complete metadata
+    
+    def is_complete(self) -> bool:
+        """Check if repository has required data for querying"""
+        
+    def validate_for_operation(self, operation: str) -> None:
+        """Validate data availability for specific operations"""
+```
+
+#### Integration Pattern
+
+```python
+# IndexingPipeline completion automatically registers with QueryEngine
+class IndexingPipeline:
+    def __init__(self, storage_dir: Path, query_engine: QueryEngine | None = None):
+        self.query_engine = query_engine
+        
+    async def _execute_pipeline(self, context: PipelineContext):
+        # ... indexing stages ...
+        
+        # On successful completion:
+        if self.query_engine:
+            indexed_repo = IndexedRepository(
+                index_id=context.index_id,
+                repo_root=context.repo_info.root,
+                # ... all pipeline artifacts ...
+            )
+            self.query_engine.register_indexed_repository(indexed_repo)
+            
+# MCP Server orchestrates both components
+class MCPServer:
+    def __init__(self, storage_dir: Path, query_engine: QueryEngine | None = None):
+        self.query_engine = query_engine or QueryEngine()
+        
+    async def _ensure_repo_index(self, arguments):
+        pipeline = IndexingPipeline(self.indexes_dir, self.query_engine)
+        return await pipeline.start_indexing(...)
+        
+    async def _search_repo(self, arguments):
+        return await self.query_engine.search(...)
+        
+    async def _ask_index(self, arguments):
+        return await self.query_engine.ask(...)
+```
+
+#### Architectural Benefits
+
+1. **Single Responsibility Principle**: Each class has exactly one reason to change
+   - IndexingPipeline: Changes when indexing logic changes
+   - QueryEngine: Changes when querying logic changes
+
+2. **Enhanced Testability**: Isolated concerns enable focused unit testing
+   - Test indexing without mocking query operations
+   - Test querying without running full indexing pipelines
+
+3. **Improved Extensibility**: Easy to add capabilities without cross-cutting changes
+   - New indexing stages don't affect query logic
+   - New query types don't affect indexing pipeline
+
+4. **Performance Optimization**: Dedicated concurrency controls
+   - IndexingPipeline: IO and CPU semaphores for pipeline stages
+   - QueryEngine: Query-specific concurrency for search/ask operations
+
+5. **Clean Dependency Injection**: Optional QueryEngine integration
+   - IndexingPipeline can operate standalone
+   - QueryEngine can be shared across multiple pipelines
+   - Easy to mock for testing
+
+6. **Maintainable Codebase**: Clear boundaries reduce cognitive complexity
+   - 600+ lines of mixed concerns → 2 focused classes
+   - Easier onboarding for new developers
+   - Reduced risk of unintended cross-cutting changes
+
+### 3. Pipeline Orchestration (`src/repoindex/pipeline/`) - Indexing Components
+
+#### `run.py` - Indexing Pipeline Controller (Refactored)
+
+**Post-Separation**: IndexingPipeline now focuses exclusively on indexing operations:
+
 ```python
 class IndexingPipeline:
-    """Orchestrates all six pipeline stages with proper error handling"""
+    """Orchestrates all six indexing pipeline stages with proper error handling"""
     
-    async def execute(self, config: IndexConfig) -> IndexManifest:
-        """Main execution flow with stage transitions"""
+    def __init__(self, storage_dir: Path, query_engine: QueryEngine | None = None):
+        """Optional QueryEngine integration for completed indexes"""
+    
+    async def start_indexing(self, repo_path: str, ...) -> str:
+        """Main indexing workflow - returns index_id"""
         
-    async def _run_stage(self, stage: Stage, context: PipelineContext):
-        """Individual stage execution with progress reporting"""
+    async def _execute_pipeline(self, context: PipelineContext):
+        """Execute all six pipeline stages with comprehensive error handling"""
         
-    def _emit_stage_transition(self, stage: str, progress: int):
-        """Notify MCP clients of pipeline progress"""
+    # Six indexing stages:
+    async def _stage_acquire(self, context: PipelineContext):
+    async def _stage_repomapper(self, context: PipelineContext):
+    async def _stage_serena(self, context: PipelineContext):
+    async def _stage_leann(self, context: PipelineContext):
+    async def _stage_snippets(self, context: PipelineContext):
+    async def _stage_bundle(self, context: PipelineContext):
+    
+    # REMOVED: search() and ask() methods moved to QueryEngine
 ```
 
 #### Key Features:
@@ -117,7 +251,7 @@ class GitDiscovery:
         """Generate cache key from HEAD tree hash + config"""
 ```
 
-### 3. External Tool Adapters
+### 4. External Tool Adapters
 
 #### `repomapper.py` - Repository Structure Analysis
 - **Adapter pattern** for RepoMapper integration
