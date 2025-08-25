@@ -102,7 +102,7 @@ class SecurityTestFramework:
             tests_run=results["test_summary"]["tests_run"],
             tests_passed=results["test_summary"]["tests_passed"],
             tests_failed=results["test_summary"]["tests_failed"],
-            success_rate=f"{results['test_summary']['success_rate']*100:.1f}%",
+            success_rate=f"{results['test_summary']['success_rate'] * 100:.1f}%",
         )
 
         return results
@@ -773,7 +773,7 @@ if __name__ == "__main__":
     print(f"Tests Passed: {results['test_summary']['tests_passed']}")
     print(f"Tests Failed: {results['test_summary']['tests_failed']}")
     print(f"Critical Failures: {results['test_summary']['critical_failures']}")
-    print(f"Success Rate: {results['test_summary']['success_rate']*100:.1f}%")
+    print(f"Success Rate: {results['test_summary']['success_rate'] * 100:.1f}%")
     print(f"Duration: {results['test_summary']['duration']:.2f} seconds")
 
     print("\nDETAILED RESULTS:")

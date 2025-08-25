@@ -249,7 +249,7 @@ class AuditLogger:
 
         # Log to standard logger based on severity
         log_message = f"Security event: {event.event_type.value} - {event.message}"
-        
+
         if event.severity == SecurityEventSeverity.CRITICAL:
             logger.critical(log_message)
         elif event.severity == SecurityEventSeverity.HIGH:

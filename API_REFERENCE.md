@@ -12,7 +12,7 @@ Mimir runs as an MCP stdio server, communicating via JSON-RPC over stdin/stdout:
 
 ```bash
 # Start the server
-python -m repoindex.main mcp
+python -m repoindex.mcp.server
 
 # Or with security enabled
 python -m repoindex.main_secure mcp

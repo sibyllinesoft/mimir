@@ -145,9 +145,7 @@ def safe_move(src: str | Path, dst: str | Path) -> None:
         raise ValueError(f"Move verification failed: {src} -> {dst}")
 
 
-def cleanup_directory(
-    directory: str | Path, keep_patterns: list[str] | None = None
-) -> None:
+def cleanup_directory(directory: str | Path, keep_patterns: list[str] | None = None) -> None:
     """Clean up directory, optionally keeping files matching patterns."""
     directory = Path(directory)
 

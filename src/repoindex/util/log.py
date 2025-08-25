@@ -197,9 +197,7 @@ Started: {datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")}
         self.json_logger.info(message, extra=extra)
         self.md_logger.info(message, extra=extra)
 
-    def log_warning(
-        self, message: str, stage: PipelineStage | None = None, **kwargs: Any
-    ) -> None:
+    def log_warning(self, message: str, stage: PipelineStage | None = None, **kwargs: Any) -> None:
         """Log a warning."""
         extra = {"index_id": self.index_id, **kwargs}
         if stage:

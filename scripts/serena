@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""
+Serena CLI tool stub.
+
+Provides TypeScript/JavaScript symbol analysis and resolution
+compatible with the SerenaAdapter expectations.
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any, Dict, List
+
+
+def get_version() -> str:
+    """Return tool version."""
+    return "serena 1.0.0"
+
+
+def create_mock_symbol_entries(files: List[str]) -> List[Dict[str, Any]]:
+    """Create mock symbol entries for TypeScript/JavaScript files."""
+    symbols = []
+    
+    for file_path in files:
+        # Only process TS/JS files
+        if not any(file_path.endswith(ext) for ext in ['.ts', '.tsx', '.js', '.jsx']):
+            continue
+            
+        base_name = Path(file_path).stem
+        
+        # Generate mock symbol entries
+        symbols.extend([
+            {
+                "type": "definition",
+                "path": file_path,
+                "start": 0,
+                "end": 100,
+                "symbol": f"{base_name}Function",
+                "signature": f"function {base_name}Function(): void"
+            },
+            {
+                "type": "reference",
+                "path": file_path,
+                "start": 50,
+                "end": 70,
+                "symbol": f"{base_name}Variable",
+                "from": "external-module"
+            },
+            {
+                "type": "call",
+                "path": file_path,
+                "start": 80,
+                "end": 95,
+                "caller": f"{base_name}Function",
+                "callee": "console.log"
+            },
+            {
+                "type": "import",
+                "path": file_path,
+                "start": 0,
+                "end": 20,
+                "symbol": "React",
+                "from": "react"
+            }
+        ])
+    
+    return symbols
+
+
+def main():
+    """Main CLI entry point."""
+    parser = argparse.ArgumentParser(description="TypeScript/JavaScript symbol analysis tool")
+    parser.add_argument("--version", action="store_true", help="Show version")
+    parser.add_argument("command", nargs="?", help="Command to execute")
+    parser.add_argument("--config", type=str, help="Configuration file path")
+    parser.add_argument("--output", type=str, help="Output file path")
+    parser.add_argument("--format", type=str, default="jsonl", help="Output format")
+    parser.add_argument("--project", type=str, help="Project root directory")
+    parser.add_argument("--files", type=str, help="File containing list of files")
+    parser.add_argument("--file", type=str, help="Single file to analyze")
+    parser.add_argument("--position", type=int, help="Position in file")
+    parser.add_argument("--symbol", type=str, help="Symbol name to search for")
+    parser.add_argument("--first-order-only", action="store_true", help="First-order dependencies only")
+    parser.add_argument("--direct-imports-only", action="store_true", help="Direct imports only")
+    
+    args = parser.parse_args()
+    
+    if args.version:
+        print(get_version())
+        sys.exit(0)
+    
+    command = args.command or "analyze"
+    
+    if command == "analyze":
+        # Main symbol analysis command
+        if not args.config:
+            print("Error: --config is required for analyze command", file=sys.stderr)
+            sys.exit(1)
+        
+        config_path = Path(args.config)
+        if not config_path.exists():
+            print(f"Error: Configuration file does not exist: {config_path}", file=sys.stderr)
+            sys.exit(1)
+        
+        # Load configuration
+        with open(config_path) as f:
+            config = json.load(f)
+        
+        files = config.get("files", [])
+        symbol_entries = create_mock_symbol_entries(files)
+        
+        # Output symbols in JSONL format
+        if args.output:
+            with open(args.output, 'w') as f:
+                for entry in symbol_entries:
+                    f.write(json.dumps(entry) + "\n")
+        else:
+            for entry in symbol_entries:
+                print(json.dumps(entry))
+    
+    elif command == "extract-types":
+        # Extract TypeScript declaration files
+        print("Extracting dependency types...", file=sys.stderr)
+        # This would extract .d.ts files - for now just print progress
+        print("Progress: 50%", file=sys.stderr)
+        print("Progress: 100%", file=sys.stderr)
+    
+    elif command == "extract-vendor":
+        # Extract vendor source code
+        print("Extracting vendor sources...", file=sys.stderr)
+        print("Progress: 25%", file=sys.stderr)
+        print("Progress: 75%", file=sys.stderr)
+        print("Progress: 100%", file=sys.stderr)
+    
+    elif command == "find-references":
+        # Find symbol references
+        if not args.symbol:
+            print("Error: --symbol is required for find-references command", file=sys.stderr)
+            sys.exit(1)
+        
+        references = [
+            {"file": "src/main.ts", "line": 10, "column": 5, "context": f"Usage of {args.symbol}"},
+            {"file": "src/utils.ts", "line": 25, "column": 12, "context": f"Reference to {args.symbol}"}
+        ]
+        
+        if args.output:
+            with open(args.output, 'w') as f:
+                json.dump(references, f, indent=2)
+        else:
+            print(json.dumps(references, indent=2))
+    
+    elif command == "definition":
+        # Get symbol definition
+        if not args.file or args.position is None:
+            print("Error: --file and --position are required for definition command", file=sys.stderr)
+            sys.exit(1)
+        
+        definition = {
+            "symbol": "exampleFunction",
+            "file": args.file,
+            "line": 1,
+            "column": 10,
+            "signature": "function exampleFunction(): void",
+            "documentation": "Example function definition"
+        }
+        
+        print(json.dumps(definition))
+    
+    elif command == "validate":
+        # Validate TypeScript project
+        validation_result = {
+            "valid": True,
+            "typescript_files": 10,
+            "javascript_files": 2,
+            "errors": [],
+            "warnings": ["Missing type annotations in some files"]
+        }
+        
+        print(json.dumps(validation_result))
+    
+    else:
+        print(f"Error: Unknown command: {command}", file=sys.stderr)
+        sys.exit(1)
+    
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

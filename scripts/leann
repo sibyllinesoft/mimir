@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+"""
+LEANN CLI tool stub.
+
+Provides CPU-based vector embeddings and code analysis
+compatible with the LEANNAdapter expectations.
+"""
+
+import argparse
+import json
+import sys
+import struct
+import random
+from pathlib import Path
+from typing import Any, Dict, List
+
+
+def get_version() -> str:
+    """Return tool version."""
+    return "leann 1.0.0"
+
+
+def create_mock_embeddings(texts: List[str], dimension: int = 384) -> List[List[float]]:
+    """Create mock embeddings for text inputs."""
+    embeddings = []
+    
+    for text in texts:
+        # Create deterministic "embedding" based on text hash
+        text_hash = hash(text) % (2**32)
+        random.seed(text_hash)
+        
+        # Generate normalized random vector
+        embedding = [random.gauss(0, 1) for _ in range(dimension)]
+        
+        # Normalize
+        norm = sum(x*x for x in embedding) ** 0.5
+        if norm > 0:
+            embedding = [x / norm for x in embedding]
+        
+        embeddings.append(embedding)
+    
+    return embeddings
+
+
+def save_embeddings_binary(embeddings: List[List[float]], output_path: Path):
+    """Save embeddings in binary format."""
+    if not embeddings:
+        return
+        
+    dimension = len(embeddings[0])
+    
+    with open(output_path, 'wb') as f:
+        # Write header: [count][dimension]
+        f.write(struct.pack('I', len(embeddings)))
+        f.write(struct.pack('I', dimension))
+        
+        # Write embeddings as float32
+        for embedding in embeddings:
+            for value in embedding:
+                f.write(struct.pack('f', value))
+
+
+def main():
+    """Main CLI entry point."""
+    parser = argparse.ArgumentParser(description="CPU-based vector embeddings tool")
+    parser.add_argument("--version", action="store_true", help="Show version")
+    parser.add_argument("command", nargs="?", help="Command to execute")
+    parser.add_argument("--input", type=str, help="Input file or directory")
+    parser.add_argument("--output", type=str, help="Output directory")
+    parser.add_argument("--model", type=str, default="all-MiniLM-L6-v2", help="Embedding model")
+    parser.add_argument("--chunk-size", type=int, default=400, help="Chunk size in tokens")
+    parser.add_argument("--overlap", type=int, default=64, help="Overlap size in tokens") 
+    parser.add_argument("--format", type=str, default="binary", help="Output format")
+    parser.add_argument("--files-list", type=str, help="File containing list of files")
+    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for processing")
+    
+    args = parser.parse_args()
+    
+    if args.version:
+        print(get_version())
+        sys.exit(0)
+    
+    command = args.command or "embed"
+    
+    if command == "embed":
+        # Main embedding command
+        if not args.input or not args.output:
+            print("Error: --input and --output are required for embed command", file=sys.stderr)
+            sys.exit(1)
+        
+        input_path = Path(args.input)
+        output_path = Path(args.output)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # Read files to process
+        files_to_process = []
+        if args.files_list:
+            files_list_path = Path(args.files_list)
+            if files_list_path.exists():
+                with open(files_list_path) as f:
+                    files_to_process = [line.strip() for line in f if line.strip()]
+        elif input_path.is_file():
+            files_to_process = [str(input_path)]
+        else:
+            # Find files in directory
+            for ext in ['.py', '.ts', '.js', '.tsx', '.jsx', '.md', '.txt']:
+                files_to_process.extend([str(p) for p in input_path.rglob(f"*{ext}")])
+        
+        if not files_to_process:
+            print("No files to process", file=sys.stderr)
+            sys.exit(1)
+        
+        # Process files and create embeddings
+        all_chunks = []
+        all_embeddings = []
+        
+        print(f"Processing {len(files_to_process)} files...", file=sys.stderr)
+        
+        for i, file_path in enumerate(files_to_process):
+            try:
+                full_path = Path(file_path)
+                if not full_path.exists():
+                    full_path = input_path / file_path
+                
+                if not full_path.exists():
+                    continue
+                
+                # Read file content
+                content = full_path.read_text(encoding='utf-8', errors='ignore')
+                
+                # Simple chunking by lines (mock implementation)
+                lines = content.split('\n')
+                chunk_size_lines = args.chunk_size // 10  # Approximate
+                
+                for j in range(0, len(lines), chunk_size_lines):
+                    chunk_lines = lines[j:j + chunk_size_lines]
+                    chunk_content = '\n'.join(chunk_lines)
+                    
+                    if len(chunk_content.strip()) < 50:  # Skip very small chunks
+                        continue
+                    
+                    chunk_id = f"chunk_{i}_{j}"
+                    chunk_info = {
+                        "chunk_id": chunk_id,
+                        "path": str(file_path),
+                        "span": [j * 50, (j + len(chunk_lines)) * 50],  # Mock byte positions
+                        "content": chunk_content,
+                        "token_count": len(chunk_content.split())
+                    }
+                    all_chunks.append(chunk_info)
+                
+                # Progress update
+                if (i + 1) % 10 == 0:
+                    print(f"Processed {i + 1}/{len(files_to_process)} files", file=sys.stderr)
+                    
+            except Exception as e:
+                print(f"Warning: Failed to process {file_path}: {e}", file=sys.stderr)
+                continue
+        
+        if not all_chunks:
+            print("No chunks generated", file=sys.stderr)
+            sys.exit(1)
+        
+        print(f"Generating embeddings for {len(all_chunks)} chunks...", file=sys.stderr)
+        
+        # Generate embeddings
+        chunk_texts = [chunk["content"] for chunk in all_chunks]
+        embeddings = create_mock_embeddings(chunk_texts)
+        
+        # Save results
+        print("Saving results...", file=sys.stderr)
+        
+        # Save chunk metadata
+        chunks_file = output_path / "chunks.json"
+        with open(chunks_file, 'w') as f:
+            json.dump(all_chunks, f, indent=2)
+        
+        # Save embeddings
+        if args.format == "binary":
+            embeddings_file = output_path / "vectors.bin"
+            save_embeddings_binary(embeddings, embeddings_file)
+        else:
+            embeddings_file = output_path / "embeddings.json"
+            with open(embeddings_file, 'w') as f:
+                json.dump(embeddings, f)
+        
+        # Save index metadata
+        index_file = output_path / "leann.index"
+        index_metadata = {
+            "chunk_count": len(all_chunks),
+            "dimension": 384,
+            "total_tokens": sum(chunk["token_count"] for chunk in all_chunks),
+            "model_name": args.model,
+            "format": args.format
+        }
+        with open(index_file, 'w') as f:
+            json.dump(index_metadata, f, indent=2)
+        
+        print(f"✅ Successfully processed {len(files_to_process)} files, generated {len(all_chunks)} chunks", file=sys.stderr)
+    
+    elif command == "search":
+        # Search similar chunks
+        if not args.input or not args.output:
+            print("Error: --input and --output are required for search command", file=sys.stderr)
+            sys.exit(1)
+        
+        # Mock search results
+        results = [
+            {"chunk_id": "chunk_0_0", "similarity": 0.95, "path": "main.py"},
+            {"chunk_id": "chunk_1_10", "similarity": 0.87, "path": "utils.py"},
+            {"chunk_id": "chunk_2_5", "similarity": 0.82, "path": "config.py"}
+        ]
+        
+        output_path = Path(args.output)
+        with open(output_path, 'w') as f:
+            json.dump(results, f, indent=2)
+    
+    else:
+        print(f"Error: Unknown command: {command}", file=sys.stderr)
+        sys.exit(1)
+    
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

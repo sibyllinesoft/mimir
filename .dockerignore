@@ -108,6 +108,12 @@ config.local.*
 .dmypy.json
 dmypy.json
 
+# Build and release scripts (not needed in container)
+scripts/build.py
+scripts/release.py
+scripts/install.sh
+scripts/install.bat
+
 # Development scripts
 scripts/dev/
 scripts/local/
@@ -117,6 +123,20 @@ dev_tools/
 docker-compose.override.yml
 docker-compose.dev.yml
 Dockerfile.dev
+
+# Distribution artifacts
+dist/
+MANIFEST.in
+
+# Additional Mimir-specific exclusions
+gemini_test_env/
+repomix-output.xml
+repomix.config.json
+hello.py
+*_benchmark.py
+test_*.py
+validate_*.py
+requirements*.txt
 
 # Security files
 *.key

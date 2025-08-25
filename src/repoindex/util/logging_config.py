@@ -173,7 +173,7 @@ class PerformanceLogger:
                 self.metrics.disk_io_write = final_io.write_bytes - self.initial_io.write_bytes
                 self.metrics.network_bytes_sent = final_net.bytes_sent - self.initial_net.bytes_sent
                 self.metrics.network_bytes_recv = final_net.bytes_recv - self.initial_net.bytes_recv
-            except:
+            except Exception:
                 pass  # Ignore metrics collection errors
 
         # Determine log level based on duration and errors
@@ -385,12 +385,28 @@ def _configure_default_logging():
     """Configure basic logging if not already configured."""
     root_logger = logging.getLogger()
     if not root_logger.handlers:
-        # Get configuration from environment
-        log_level = os.getenv("MIMIR_LOG_LEVEL", "INFO")
-        log_format = os.getenv("MIMIR_LOG_FORMAT", "human")
-        log_file = os.getenv("MIMIR_LOG_FILE")
+        # Try to get configuration from centralized config first, fall back to environment
+        try:
+            from ..config import get_logging_config
+            from ..config_migration import migration_tracker
+            
+            config = get_logging_config()
+            setup_logging(
+                log_level=config.log_level,
+                log_format=config.log_format,
+                log_file=config.log_file
+            )
+            
+            # Mark this file as migrated
+            migration_tracker.mark_migrated(__file__, ["logging"])
+            
+        except ImportError:
+            # Centralized config not available, fall back to environment variables
+            log_level = os.getenv("MIMIR_LOG_LEVEL", "INFO")
+            log_format = os.getenv("MIMIR_LOG_FORMAT", "human")
+            log_file = os.getenv("MIMIR_LOG_FILE")
 
-        setup_logging(log_level=log_level, log_format=log_format, log_file=log_file)
+            setup_logging(log_level=log_level, log_format=log_format, log_file=log_file)
 
 
 # Initialize default logging

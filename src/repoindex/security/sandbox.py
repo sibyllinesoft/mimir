@@ -7,7 +7,6 @@ environments for code analysis operations.
 
 import asyncio
 import os
-import resource
 import signal
 import tempfile
 import time
@@ -18,6 +17,7 @@ from typing import Any
 
 from ..util.errors import ExternalToolError, SecurityError
 from ..util.log import get_logger
+from ..util.platform import get_platform_adapter, is_unix_like
 
 logger = get_logger(__name__)
 
@@ -56,112 +56,91 @@ class ResourceLimiter:
         self.limits = self.DEFAULT_LIMITS.copy()
         if custom_limits:
             self.limits.update(custom_limits)
+        
+        # Get platform adapter for cross-platform resource management
+        self.platform = get_platform_adapter()
 
     def set_process_limits(self) -> None:
-        """Set resource limits for the current process."""
+        """Set resource limits for the current process using platform adapter."""
         try:
+            success_count = 0
+            
             # Memory limit (RSS - Resident Set Size)
             if self.limits["max_memory"] > 0:
-                resource.setrlimit(
-                    resource.RLIMIT_RSS, (self.limits["max_memory"], self.limits["max_memory"])
-                )
+                if self.platform.set_memory_limit(self.limits["max_memory"]):
+                    success_count += 1
 
             # CPU time limit
             if self.limits["max_cpu_time"] > 0:
-                resource.setrlimit(
-                    resource.RLIMIT_CPU, (self.limits["max_cpu_time"], self.limits["max_cpu_time"])
-                )
+                if self.platform.set_cpu_limit(self.limits["max_cpu_time"]):
+                    success_count += 1
 
             # File descriptor limit
             if self.limits["max_open_files"] > 0:
-                resource.setrlimit(
-                    resource.RLIMIT_NOFILE,
-                    (self.limits["max_open_files"], self.limits["max_open_files"]),
-                )
+                if self.platform.set_file_descriptor_limit(self.limits["max_open_files"]):
+                    success_count += 1
 
             # Process limit
             if self.limits["max_processes"] > 0:
-                resource.setrlimit(
-                    resource.RLIMIT_NPROC,
-                    (self.limits["max_processes"], self.limits["max_processes"]),
-                )
+                if self.platform.set_process_limit(self.limits["max_processes"]):
+                    success_count += 1
 
             # File size limit
             if self.limits["max_file_size"] > 0:
-                resource.setrlimit(
-                    resource.RLIMIT_FSIZE,
-                    (self.limits["max_file_size"], self.limits["max_file_size"]),
-                )
+                if self.platform.set_file_size_limit(self.limits["max_file_size"]):
+                    success_count += 1
 
-            logger.debug("Process resource limits set", limits=self.limits)
+            logger.debug(
+                "Process resource limits set via platform adapter", 
+                limits=self.limits,
+                successful_limits=success_count,
+                platform=self.platform.get_system_info().platform
+            )
 
-        except (ValueError, OSError) as e:
-            logger.warning("Failed to set some resource limits", error=str(e), limits=self.limits)
+        except Exception as e:
+            logger.warning("Failed to set resource limits via platform adapter", error=str(e), limits=self.limits)
 
     def check_memory_usage(self) -> dict[str, Any]:
-        """Check current memory usage against limits.
+        """Check current memory usage against limits using platform adapter.
 
         Returns:
             Dictionary with memory usage information
         """
         try:
-            usage = resource.getrusage(resource.RUSAGE_SELF)
-            memory_kb = usage.ru_maxrss
-
-            # Convert to bytes (ru_maxrss is in KB on Linux, bytes on macOS)
-            if os.name == "posix" and os.uname().sysname != "Darwin":
-                memory_bytes = memory_kb * 1024
-            else:
-                memory_bytes = memory_kb
-
-            memory_percent = (
-                (memory_bytes / self.limits["max_memory"]) * 100
-                if self.limits["max_memory"] > 0
-                else 0
+            resource_usage = self.platform.get_resource_usage(
+                memory_limit=self.limits["max_memory"]
             )
-
+            
             return {
-                "memory_bytes": memory_bytes,
-                "memory_mb": memory_bytes / (1024 * 1024),
-                "memory_percent": memory_percent,
-                "limit_bytes": self.limits["max_memory"],
-                "limit_exceeded": (
-                    memory_bytes > self.limits["max_memory"]
-                    if self.limits["max_memory"] > 0
-                    else False
-                ),
+                "memory_bytes": resource_usage.memory_bytes,
+                "memory_mb": resource_usage.memory_mb,
+                "memory_percent": resource_usage.memory_percent,
+                "limit_bytes": resource_usage.memory_limit_bytes,
+                "limit_exceeded": resource_usage.memory_limit_exceeded,
             }
         except Exception as e:
-            logger.warning("Failed to check memory usage", error=str(e))
+            logger.warning("Failed to check memory usage via platform adapter", error=str(e))
             return {"error": str(e)}
 
     def check_cpu_usage(self) -> dict[str, Any]:
-        """Check current CPU usage against limits.
+        """Check current CPU usage against limits using platform adapter.
 
         Returns:
             Dictionary with CPU usage information
         """
         try:
-            usage = resource.getrusage(resource.RUSAGE_SELF)
-            cpu_time = usage.ru_utime + usage.ru_stime
-            cpu_percent = (
-                (cpu_time / self.limits["max_cpu_time"]) * 100
-                if self.limits["max_cpu_time"] > 0
-                else 0
+            resource_usage = self.platform.get_resource_usage(
+                cpu_limit=self.limits["max_cpu_time"]
             )
 
             return {
-                "cpu_time_seconds": cpu_time,
-                "cpu_percent": cpu_percent,
-                "limit_seconds": self.limits["max_cpu_time"],
-                "limit_exceeded": (
-                    cpu_time > self.limits["max_cpu_time"]
-                    if self.limits["max_cpu_time"] > 0
-                    else False
-                ),
+                "cpu_time_seconds": resource_usage.cpu_time_seconds,
+                "cpu_percent": resource_usage.cpu_percent,
+                "limit_seconds": resource_usage.cpu_limit_seconds,
+                "limit_exceeded": resource_usage.cpu_limit_exceeded,
             }
         except Exception as e:
-            logger.warning("Failed to check CPU usage", error=str(e))
+            logger.warning("Failed to check CPU usage via platform adapter", error=str(e))
             return {"error": str(e)}
 
 
@@ -219,15 +198,19 @@ class ProcessIsolator:
 
         try:
             # Create subprocess with security restrictions
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                cwd=cwd,
-                env=isolated_env,
-                stdin=asyncio.subprocess.PIPE if input_data else None,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                preexec_fn=self._setup_child_process,
-            )
+            # preexec_fn is Unix-only, so only use it on Unix-like systems
+            subprocess_kwargs = {
+                "cwd": cwd,
+                "env": isolated_env,
+                "stdin": asyncio.subprocess.PIPE if input_data else None,
+                "stdout": asyncio.subprocess.PIPE,
+                "stderr": asyncio.subprocess.PIPE,
+            }
+            
+            if is_unix_like():
+                subprocess_kwargs["preexec_fn"] = self._setup_child_process
+                
+            process = await asyncio.create_subprocess_exec(*command, **subprocess_kwargs)
 
             # Run with timeout
             try:
@@ -392,17 +375,21 @@ class ProcessIsolator:
         return isolated_env
 
     def _setup_child_process(self) -> None:
-        """Set up child process with security restrictions."""
+        """Set up child process with security restrictions (Unix-only)."""
         try:
-            # Set resource limits
+            # Set resource limits using platform adapter
             self.resource_limiter.set_process_limits()
 
-            # Create new process group
-            os.setpgrp()
+            # Unix-specific process isolation (not available on Windows)
+            if is_unix_like():
+                # Create new process group  
+                os.setpgrp()
 
-            # Set up signal handling to prevent escape
-            signal.signal(signal.SIGINT, signal.SIG_DFL)
-            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+                # Set up signal handling to prevent escape
+                signal.signal(signal.SIGINT, signal.SIG_DFL)
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            else:
+                logger.debug("Process group isolation not available on Windows")
 
         except Exception as e:
             logger.warning("Failed to set up child process restrictions", error=str(e))

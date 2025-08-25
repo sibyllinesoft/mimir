@@ -20,7 +20,7 @@ services:
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
     networks:
-      - mimir_network
+      - mimir-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
@@ -43,7 +43,7 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
-      - mimir_network
+      - mimir-network
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -64,7 +64,7 @@ services:
       - loki_data:/tmp/loki
     command: -config.file=/etc/loki/local-config.yaml
     networks:
-      - mimir_network
+      - mimir-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
@@ -82,7 +82,7 @@ services:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     command: -config.file=/etc/promtail/config.yml
     networks:
-      - mimir_network
+      - mimir-network
     restart: unless-stopped
     depends_on:
       - loki
@@ -100,7 +100,7 @@ services:
     volumes:
       - jaeger_data:/tmp
     networks:
-      - mimir_network
+      - mimir-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:14269/"]
@@ -120,7 +120,7 @@ services:
       - ./otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     command: ["--config=/etc/otel-collector-config.yaml"]
     networks:
-      - mimir_network
+      - mimir-network
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -145,7 +145,7 @@ services:
       - '--storage.path=/alertmanager'
       - '--web.external-url=http://localhost:9093'
     networks:
-      - mimir_network
+      - mimir-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
@@ -169,12 +169,11 @@ services:
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     networks:
-      - mimir_network
+      - mimir-network
     restart: unless-stopped
 
 networks:
-  mimir_network:
-    driver: bridge
+  mimir-network:
     external: true
 
 volumes:

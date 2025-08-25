@@ -285,7 +285,6 @@ class TraceManager:
         async with self.trace_operation(
             stage_name, pipeline_id=pipeline_id, stage=stage, **attributes
         ) as span:
-
             # Pipeline-specific attributes
             span.set_attribute("pipeline.stage", stage)
             span.set_attribute("pipeline.id", pipeline_id)
@@ -311,7 +310,6 @@ class TraceManager:
         async with self.trace_operation(
             f"search.{search_type}", search_type=search_type, query_length=len(query), **attributes
         ) as span:
-
             # Search-specific attributes
             span.set_attribute("search.type", search_type)
             span.set_attribute("search.query_length", len(query))
@@ -325,7 +323,6 @@ class TraceManager:
         async with self.trace_operation(
             f"mcp.{method}", method=method, request_id=request_id or str(uuid.uuid4()), **attributes
         ) as span:
-
             # MCP-specific attributes
             span.set_attribute("mcp.method", method)
             if request_id:
@@ -432,11 +429,28 @@ def get_trace_manager() -> TraceManager:
                 # Configure from environment
                 import os
 
-                service_name = os.getenv("MIMIR_SERVICE_NAME", "mimir-repoindex")
-                jaeger_endpoint = os.getenv("JAEGER_ENDPOINT")
-                otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-                console_export = os.getenv("MIMIR_TRACE_CONSOLE", "false").lower() == "true"
-                sample_rate = float(os.getenv("MIMIR_TRACE_SAMPLE_RATE", "1.0"))
+                # Try to get configuration from centralized config first, fall back to environment
+                try:
+                    from ..config import get_monitoring_config
+                    from ..config_migration import migration_tracker
+                    
+                    config = get_monitoring_config()
+                    service_name = config.service_name
+                    jaeger_endpoint = config.jaeger_endpoint
+                    otlp_endpoint = config.otlp_endpoint
+                    console_export = config.trace_console
+                    sample_rate = config.trace_sample_rate
+                    
+                    # Mark this file as migrated
+                    migration_tracker.mark_migrated(__file__, ["monitoring"])
+                    
+                except ImportError:
+                    # Centralized config not available, fall back to environment variables
+                    service_name = os.getenv("MIMIR_SERVICE_NAME", "mimir-repoindex")
+                    jaeger_endpoint = os.getenv("JAEGER_ENDPOINT")
+                    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+                    console_export = os.getenv("MIMIR_TRACE_CONSOLE", "false").lower() == "true"
+                    sample_rate = float(os.getenv("MIMIR_TRACE_SAMPLE_RATE", "1.0"))
 
                 _trace_manager = TraceManager(
                     service_name=service_name,

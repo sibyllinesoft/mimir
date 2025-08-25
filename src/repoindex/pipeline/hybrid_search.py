@@ -75,7 +75,6 @@ class HybridSearchEngine:
         async with self.trace_manager.trace_search_request(
             "hybrid", query, k=k, features_enabled=features.dict()
         ) as span:
-
             # Initialize result candidates
             vector_candidates = []
             symbol_candidates = []

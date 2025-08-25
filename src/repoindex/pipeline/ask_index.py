@@ -6,8 +6,10 @@ intent parsing, and evidence gathering for code understanding.
 """
 
 import re
+from typing import Any, Optional
 
 from ..data.schemas import AskResponse, Citation, CodeSnippet, SerenaGraph, SymbolEntry, SymbolType
+from .gemini import GeminiAdapter, GeminiError
 
 
 class Intent:
@@ -27,14 +29,26 @@ class SymbolGraphNavigator:
     and synthesizes answers with supporting evidence citations.
     """
 
-    def __init__(self):
+    def __init__(self, use_gemini: bool = True, gemini_model: str = "gemini-1.5-flash"):
         """Initialize symbol graph navigator."""
         self.max_hops = 3
         self.max_evidence_items = 10
+        self.use_gemini = use_gemini
 
         # Performance optimizations
         self._symbol_index = {}  # symbol -> List[SymbolEntry]
         self._indexed_graph = None  # Track which graph is indexed
+
+        # Initialize Gemini adapter if available
+        self.gemini_adapter = None
+        if use_gemini:
+            try:
+                self.gemini_adapter = GeminiAdapter(model_name=gemini_model)
+            except GeminiError as e:
+                # Fall back to non-Gemini mode if initialization fails
+                self.use_gemini = False
+                self.gemini_adapter = None
+                print(f"Warning: Gemini initialization failed, falling back to basic mode: {e}")
 
         # Intent patterns for query classification
         self.intent_patterns = {
@@ -133,7 +147,7 @@ class SymbolGraphNavigator:
         evidence_snippets = await self._gather_evidence(evidence_symbols, context_lines)
 
         # Synthesize answer
-        answer = await self._synthesize_answer(question, intents, evidence_snippets)
+        answer = await self._synthesize_answer(question, intents, evidence_snippets, repo_root, rev)
 
         # Create citations
         citations = [
@@ -414,12 +428,56 @@ class SymbolGraphNavigator:
         return evidence_snippets
 
     async def _synthesize_answer(
-        self, question: str, intents: list[Intent], evidence_snippets: list[CodeSnippet]
+        self,
+        question: str,
+        intents: list[Intent],
+        evidence_snippets: list[CodeSnippet],
+        repo_root: str,
+        rev: str,
     ) -> str:
-        """Synthesize answer from collected evidence."""
+        """Synthesize answer from collected evidence using Gemini if available."""
         if not evidence_snippets:
             return "I couldn't find enough information to answer your question."
 
+        # Use Gemini for intelligent synthesis if available
+        if self.use_gemini and self.gemini_adapter:
+            try:
+                # Convert intents to dict format for Gemini
+                intent_dicts = []
+                for intent in intents:
+                    intent_dicts.append(
+                        {
+                            "intent_type": intent.intent_type,
+                            "targets": intent.targets,
+                            "context": intent.context,
+                        }
+                    )
+
+                # Prepare repo info
+                repo_info = {"root": repo_root, "rev": rev}
+
+                # Use Gemini to synthesize the answer
+                answer = await self.gemini_adapter.synthesize_answer(
+                    question=question,
+                    evidence_snippets=evidence_snippets,
+                    intents=intent_dicts,
+                    repo_info=repo_info,
+                )
+
+                return answer
+
+            except Exception as e:
+                # Fall back to basic synthesis if Gemini fails
+                print(f"Warning: Gemini synthesis failed, using basic mode: {e}")
+                return self._basic_synthesize_answer(question, intents, evidence_snippets)
+
+        # Fall back to basic synthesis
+        return self._basic_synthesize_answer(question, intents, evidence_snippets)
+
+    def _basic_synthesize_answer(
+        self, question: str, intents: list[Intent], evidence_snippets: list[CodeSnippet]
+    ) -> str:
+        """Basic answer synthesis without LLM (fallback mode)."""
         answer_parts = []
 
         # Analyze the primary intent
@@ -476,7 +534,7 @@ class SymbolGraphNavigator:
                 # Try to show flow sequence
                 answer_parts.append(f"\nFlow involves {len(evidence_snippets)} components:")
                 for i, snippet in enumerate(evidence_snippets[:7]):
-                    answer_parts.append(f"  {i+1}. `{snippet.path}` - {snippet.text}")
+                    answer_parts.append(f"  {i + 1}. `{snippet.path}` - {snippet.text}")
 
             else:
                 answer_parts.append("Based on the code analysis:")

@@ -1,4 +1,6 @@
-# Python
+# =============================================================================
+# Python Build & Runtime Artifacts
+# =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -22,62 +24,262 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Virtual environments
+# =============================================================================
+# Virtual Environments & Package Management
+# =============================================================================
 .env
-.venv
-env/
+.venv/
 venv/
+env/
 ENV/
 env.bak/
 venv.bak/
+.python-version
+uv.lock
+pip-log.txt
+pip-delete-this-directory.txt
 
-# IDEs
+# =============================================================================
+# Development Tools & IDEs
+# =============================================================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.vim/
+.emacs.d/
+.sublime-project
+.sublime-workspace
 
-# Testing
+# =============================================================================
+# Testing & Quality Assurance
+# =============================================================================
 .tox/
 .nox/
 .coverage
+.coverage.*
+coverage.xml
+*.cover
+*.py,cover
 .pytest_cache/
 cover/
 htmlcov/
 .hypothesis/
-
-# Type checking
+.benchmarks/
+test-results/
+.ruff_cache/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+.bandit
+.safety
 
-# Jupyter Notebook
+# =============================================================================
+# Documentation Generation
+# =============================================================================
+docs/_build/
+site/
+.readthedocs.yml
+
+# =============================================================================
+# Jupyter & Data Science
+# =============================================================================
 .ipynb_checkpoints
+*.ipynb
+.jupyter/
+.ipython/
 
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# =============================================================================
+# Environment & Configuration
+# =============================================================================
+.env*
+!.env.example
+.envrc
+settings.ini
+local_settings.py
+secret_settings.py
+config.local.json
+*_local.json
 
-# Logs
+# =============================================================================
+# Logs & Runtime Data
+# =============================================================================
 *.log
+*.log.*
 logs/
+log/
+*.out
+*.err
+crash.log
+trace.log
 
-# Mimir specific
+# =============================================================================
+# Mimir Application Specific
+# =============================================================================
+# Runtime data and caches
 storage/
+cache/
+data/
+var/indexes/
+.serena/
+.mimir/
+temp/
+tmp/
+
+# Generated artifacts
 *.zst
 *.bundle
-temp/
-.mimir/
+*.tar.zst
+repomix-output.xml
+*.benchmark
 
-# OS
+# Test environment data
+gemini_test_env/
+test_data/
+mock_data/
+
+# Pipeline outputs
+chunks.json
+snippets.jsonl
+serena_graph.jsonl
+repomap.json
+*.leann
+
+# =============================================================================
+# Security & Secrets
+# =============================================================================
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+secrets/
+.secrets/
+credentials/
+.aws/
+.gcp/
+private/
+
+# =============================================================================
+# Container & Deployment
+# =============================================================================
+.docker/
+docker-compose.override.yml
+.dockerignore.backup
+Dockerfile.backup
+*.dockerfile.bak
+
+# =============================================================================
+# Monitoring & Operations
+# =============================================================================
+# Keep ops/ for infrastructure as code, but ignore runtime data
+prometheus_data/
+grafana_data/
+alertmanager_data/
+loki_data/
+
+# =============================================================================
+# Database Files
+# =============================================================================
+*.db
+*.sqlite
+*.sqlite3
+db.sqlite3
+database.db
+
+# =============================================================================
+# Build Tools & Automation
+# =============================================================================
+.tox/
+.nox/
+.make/
+.taskfile/
+*.spec
+.pybuilder/
+target/
+
+# Distribution packaging
+dist/
+bdist/
+*.whl
+*.tar.gz
+*.zip
+
+# PyInstaller
+*.manifest
+*.spec
+dist/
+build/
+
+# =============================================================================
+# Editor & System Files
+# =============================================================================
+# macOS
 .DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
+.AppleDouble
+.LSOverride
+
+# Windows  
 ehthumbs.db
 Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*~
+.#*
+\#*#
+
+# =============================================================================
+# Network & Communication
+# =============================================================================
+*.pid
+*.sock
+*.port
+
+# =============================================================================
+# Performance & Profiling
+# =============================================================================
+*.prof
+*.pstats
+.prof/
+profiling_results/
+
+# =============================================================================
+# Backup Files
+# =============================================================================
+*.bak
+*.backup
+*.old
+*~
+.backup/
+backups/
+
+# =============================================================================
+# Archive Files (usually shouldn't be in git)
+# =============================================================================
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+*.xz
+*.bz2

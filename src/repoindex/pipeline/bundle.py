@@ -210,9 +210,9 @@ class BundleCreator:
         bundle_files = []
 
         # Add all artifact files
-        for attr_name in dir(paths):
-            if not attr_name.startswith("_"):
-                file_path = getattr(paths, attr_name)
+        for field_name in paths.model_fields.keys():
+            file_path = getattr(paths, field_name)
+            if isinstance(file_path, str):  # Ensure it's a string path
                 full_path = work_dir / file_path
                 if full_path.exists():
                     bundle_files.append(file_path)
@@ -247,7 +247,6 @@ class BundleCreator:
         with open(output_path, "wb") as f:
             with compressor.stream_writer(f) as compressed_stream:
                 with tarfile.open(fileobj=compressed_stream, mode="w|") as tar:
-
                     for i, file_path in enumerate(files):
                         full_path = work_dir / file_path
                         if full_path.exists():

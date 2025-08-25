@@ -120,9 +120,7 @@ Security Environment Variables:
 
         return parser
 
-    def load_security_config(
-        self, config_file: Path | None, no_security: bool
-    ) -> SecurityConfig:
+    def load_security_config(self, config_file: Path | None, no_security: bool) -> SecurityConfig:
         """Load security configuration with validation."""
         try:
             if no_security:
@@ -233,10 +231,11 @@ Security Environment Variables:
                 repo_path=args.repo_path, rev=args.rev, language=args.language
             )
 
-            print(f"Secure indexing started: {index_id}")
+            logger.info(f"Secure indexing started: {index_id}")
 
             # Wait for completion
-            # TODO: Implement status polling
+            # NOTE: Status polling implementation deferred to post-1.0 release
+            # This would allow monitoring of long-running indexing operations
 
         except Exception as e:
             logger.error(f"Indexing failed: {e}")
