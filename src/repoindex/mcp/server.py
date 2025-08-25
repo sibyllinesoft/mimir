@@ -41,6 +41,7 @@ from ..data.schemas import (
 )
 from ..monitoring import get_metrics_collector, get_trace_manager
 from ..pipeline.run import IndexingPipeline
+from ..pipeline.query_engine import QueryEngine
 from ..util.fs import ensure_directory, get_index_directory
 from ..util.log import setup_logging
 
@@ -55,12 +56,15 @@ class MCPServer:
     real-time status updates through MCP resources.
     """
 
-    def __init__(self, storage_dir: Path | None = None):
-        """Initialize MCP server with optional storage directory."""
+    def __init__(self, storage_dir: Path | None = None, query_engine: QueryEngine | None = None):
+        """Initialize MCP server with optional storage directory and query engine."""
         self.storage_dir = storage_dir or Path.home() / ".cache" / "mimir"
         self.indexes_dir = self.storage_dir / "indexes"
         self.pipelines: dict[str, IndexingPipeline] = {}
         self.server = Server("mimir-repoindex")
+        
+        # Initialize or create query engine
+        self.query_engine = query_engine or QueryEngine()
 
         # Initialize monitoring
         self.metrics_collector = get_metrics_collector()
@@ -402,8 +406,8 @@ class MCPServer:
         try:
             request = EnsureRepoIndexRequest(**arguments)
 
-            # Create and start indexing pipeline
-            pipeline = IndexingPipeline(storage_dir=self.indexes_dir)
+            # Create and start indexing pipeline with query engine
+            pipeline = IndexingPipeline(storage_dir=self.indexes_dir, query_engine=self.query_engine)
             index_id = await pipeline.start_indexing(
                 repo_path=request.path,
                 rev=request.rev,
@@ -468,13 +472,9 @@ class MCPServer:
         try:
             request = SearchRepoRequest(**arguments)
 
-            # Get pipeline for this index
-            pipeline = self.pipelines.get(request.index_id)
-            if not pipeline:
-                raise ValueError(f"No active pipeline for index {request.index_id}")
-
-            # Execute search
-            response = await pipeline.search(
+            # Execute search using query engine
+            response = await self.query_engine.search(
+                index_id=request.index_id,
                 query=request.query,
                 k=request.k,
                 features=request.features,
@@ -499,14 +499,11 @@ class MCPServer:
         try:
             request = AskIndexRequest(**arguments)
 
-            # Get pipeline for this index
-            pipeline = self.pipelines.get(request.index_id)
-            if not pipeline:
-                raise ValueError(f"No active pipeline for index {request.index_id}")
-
-            # Execute ask operation
-            response = await pipeline.ask(
-                question=request.question, context_lines=request.context_lines
+            # Execute ask operation using query engine
+            response = await self.query_engine.ask(
+                index_id=request.index_id,
+                question=request.question,
+                context_lines=request.context_lines,
             )
 
             return CallToolResult(

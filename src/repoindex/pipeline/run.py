@@ -12,8 +12,6 @@ from pathlib import Path
 from typing import Any
 
 from ..data.schemas import (
-    AskResponse,
-    FeatureConfig,
     IndexConfig,
     IndexManifest,
     IndexState,
@@ -21,7 +19,6 @@ from ..data.schemas import (
     PipelineStage,
     PipelineStatus,
     RepoInfo,
-    SearchResponse,
 )
 from ..monitoring import (
     get_metrics_collector,
@@ -37,6 +34,7 @@ from ..util.errors import (
     IntegrationError,
     MimirError,
     RecoveryStrategy,
+    ValidationError,
     create_error_context,
     handle_external_tool_error,
 )
@@ -59,6 +57,7 @@ from .leann import LEANNAdapter
 from .repomapper import RepoMapperAdapter
 from .serena import SerenaAdapter
 from .snippets import SnippetExtractor
+from .query_engine import IndexedRepository, QueryEngine
 
 
 class PipelineContext:
@@ -98,11 +97,14 @@ class IndexingPipeline:
 
     Manages the complete indexing workflow from git discovery through
     bundle creation, with support for concurrent execution and error recovery.
+    
+    Separated from querying concerns - use QueryEngine for search and ask operations.
     """
 
-    def __init__(self, storage_dir: Path, concurrency_limits: dict[str, int] | None = None):
+    def __init__(self, storage_dir: Path, query_engine: QueryEngine | None = None, concurrency_limits: dict[str, int] | None = None):
         """Initialize indexing pipeline."""
         self.storage_dir = storage_dir
+        self.query_engine = query_engine
         self.concurrency_limits = concurrency_limits or {
             "io": 16,  # Increased I/O concurrency for better throughput
             "cpu": 4,  # Increased CPU concurrency for parallel processing
@@ -309,6 +311,25 @@ class IndexingPipeline:
                     span.set_attribute("pipeline.duration_seconds", duration_seconds)
                     span.set_attribute("pipeline.success", True)
 
+                    # Register with query engine if available
+                    if self.query_engine:
+                        indexed_repo = IndexedRepository(
+                            index_id=context.index_id,
+                            repo_root=context.repo_info.root,
+                            rev=context.repo_info.rev,
+                            serena_graph=context.serena_graph,
+                            vector_index=context.vector_index,
+                            repomap_data=context.repomap_data,
+                            snippets=context.snippets,
+                            manifest=context.manifest,
+                        )
+                        self.query_engine.register_indexed_repository(indexed_repo)
+                        
+                        context.logger.log_info(
+                            "Repository registered with query engine", 
+                            index_id=context.index_id
+                        )
+
                     log_pipeline_complete(context.index_id, duration_ms, stats)
 
                     context.logger.log_info(
@@ -374,14 +395,27 @@ class IndexingPipeline:
                     status.mark_failed(str(e))
                     self._save_status(context, status)
 
+                    # Mark context as failed for cleanup logic
+                    context._pipeline_failed = True
+
                     # Re-raise for upstream handling
                     raise
 
                 finally:
                     # Clean up with error handling
                     try:
+                        # Keep completed pipelines for ask functionality, only remove failed ones
                         if context.index_id in self.active_pipelines:
-                            del self.active_pipelines[context.index_id]
+                            # Check if pipeline failed by looking at the context or if this is in the exception handler
+                            # If we're in the exception handler (after raise), remove the failed pipeline
+                            # Otherwise, keep successful pipelines for querying
+                            if hasattr(context, "_pipeline_failed") and context._pipeline_failed:
+                                del self.active_pipelines[context.index_id]
+                                
+                                # Also unregister from query engine if failed
+                                if self.query_engine:
+                                    self.query_engine.unregister_indexed_repository(context.index_id)
+                            # Successful pipelines remain available for querying
 
                         # Update metrics
                         self.metrics_collector.set_cache_size(
@@ -712,7 +746,9 @@ class IndexingPipeline:
                     chunks_created = getattr(context.vector_index, "total_chunks", 0)
                     if chunks_created > 0:
                         self.metrics_collector.record_embeddings_created(
-                            "leann", "code_chunk", chunks_created  # model name
+                            "leann",
+                            "code_chunk",
+                            chunks_created,  # model name
                         )
 
                     # Add span attributes
@@ -740,7 +776,7 @@ class IndexingPipeline:
                                 "vector_enabled": context.config.features.vector,
                             },
                         )
-                        e = handle_external_tool_error(
+                        structured_error = handle_external_tool_error(
                             tool="leann",
                             command=["leann", "embed"],
                             exit_code=1,
@@ -748,10 +784,13 @@ class IndexingPipeline:
                             stderr=str(e),
                             context=error_context,
                         )
-
-                enhanced_logger.operation_error("vector_embedding", e)
-                context.logger.log_stage_error(stage, e)
-                raise
+                        enhanced_logger.operation_error("vector_embedding", structured_error)
+                        context.logger.log_stage_error(stage, structured_error)
+                        raise structured_error
+                    else:
+                        enhanced_logger.operation_error("vector_embedding", e)
+                        context.logger.log_stage_error(stage, e)
+                        raise
 
     async def _stage_snippets(self, context: PipelineContext) -> None:
         """Stage 5: Extract code snippets with enhanced error handling."""
@@ -987,54 +1026,14 @@ class IndexingPipeline:
 
         return True
 
-    async def search(
-        self,
-        query: str,
-        k: int = 20,
-        features: FeatureConfig = FeatureConfig(),
-        context_lines: int = 5,
-    ) -> SearchResponse:
-        """Execute hybrid search against the index with enhanced error handling."""
-        enhanced_logger = get_logger("pipeline.search")
+    def get_query_engine(self) -> QueryEngine | None:
+        """Get the associated query engine if available."""
+        return self.query_engine
 
-        with enhanced_logger.performance_track("hybrid_search"):
-            try:
-                # This method would be called on a completed pipeline
-                # For now, return a placeholder response
-                enhanced_logger.operation_success(
-                    "hybrid_search", query=query, features_enabled=features.dict()
-                )
+    def set_query_engine(self, query_engine: QueryEngine) -> None:
+        """Set the query engine for this pipeline."""
+        self.query_engine = query_engine
 
-                return SearchResponse(
-                    query=query,
-                    results=[],
-                    total_count=0,
-                    features_used=features,
-                    execution_time_ms=0.0,
-                    index_id="",
-                )
-            except Exception as e:
-                enhanced_logger.operation_error("hybrid_search", e, query=query)
-                raise
-
-    async def ask(self, question: str, context_lines: int = 5) -> AskResponse:
-        """Execute multi-hop reasoning against the index with enhanced error handling."""
-        enhanced_logger = get_logger("pipeline.ask")
-
-        with enhanced_logger.performance_track("question_answering"):
-            try:
-                # This method would be called on a completed pipeline
-                # For now, return a placeholder response
-                enhanced_logger.operation_success(
-                    "question_answering", question=question, context_lines=context_lines
-                )
-
-                return AskResponse(
-                    question=question, answer="", citations=[], execution_time_ms=0.0, index_id=""
-                )
-            except Exception as e:
-                enhanced_logger.operation_error("question_answering", e, question=question)
-                raise
 
     async def _execute_stage_safely(
         self, context: PipelineContext, stage_name: str, stage_func, error_collector: ErrorCollector
