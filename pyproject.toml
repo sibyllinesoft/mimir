@@ -1,7 +1,7 @@
 [project]
-name = "repoindex"
+name = "mimir"
 version = "1.0.0"
-description = "Deep Code Research System - MCP server for intelligent repository indexing"
+description = "Mimir - AI-Powered Code Research System for Claude Desktop"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
@@ -60,6 +60,9 @@ dependencies = [
     
     # AI/ML Integration
     "google-generativeai>=0.8.5,<1.0.0",  # Security: API key handling improvements
+    
+    # HTTP client for Ollama and other services
+    "aiohttp>=3.11.10,<4.0.0",  # Security: Async HTTP client with security fixes
 ]
 
 [project.optional-dependencies]
@@ -129,6 +132,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/repoindex"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/repoindex/data/schema_files/manifest.json" = "repoindex/data/schema_files/manifest.json"
+"src/repoindex/data/schema_files/symbol_entry.json" = "repoindex/data/schema_files/symbol_entry.json"
 
 [tool.black]
 line-length = 100

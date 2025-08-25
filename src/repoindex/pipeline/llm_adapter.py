@@ -17,6 +17,7 @@ from ..util.errors import MimirError, ErrorSeverity, ErrorCategory, RecoveryStra
 
 class LLMCapability(Enum):
     """Enumeration of LLM capabilities."""
+    TEXT_GENERATION = "text_generation"
     CODE_ANALYSIS = "code_analysis"
     QUESTION_ANSWERING = "question_answering"
     CODE_EXPLANATION = "code_explanation"
@@ -82,7 +83,7 @@ class LLMError(MimirError):
         super().__init__(
             message=f"LLM Error ({provider}/{model}): {message}",
             severity=ErrorSeverity.MEDIUM,
-            category=ErrorCategory.EXTERNAL_SERVICE,
+            category=ErrorCategory.EXTERNAL_TOOL,
             recovery_strategy=RecoveryStrategy.RETRY if retryable else RecoveryStrategy.ESCALATE,
             **kwargs
         )

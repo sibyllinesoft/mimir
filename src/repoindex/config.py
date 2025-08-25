@@ -148,6 +148,27 @@ class PipelineConfig(BaseSettings):
     model_config = {"env_prefix": "PIPELINE_"}
 
 
+class QueryConfig(BaseSettings):
+    """Query transformation configuration."""
+    
+    enable_hyde: bool = Field(default=False, env="QUERY_ENABLE_HYDE")
+    transformer_provider: Literal["gemini", "ollama"] = Field(default="ollama", env="QUERY_TRANSFORMER_PROVIDER")
+    transformer_model: str | None = Field(default=None, env="QUERY_TRANSFORMER_MODEL")
+    
+    model_config = {"env_prefix": ""}
+
+
+class RerankerConfig(BaseSettings):
+    """Cross-encoder reranking configuration."""
+    
+    enabled: bool = Field(default=False, env="QUERY_RERANKER_ENABLED")
+    model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2", env="QUERY_RERANKER_MODEL")
+    top_k: int = Field(default=20, env="QUERY_RERANKER_TOP_K")
+    initial_retrieval_k: int = Field(default=100, env="QUERY_INITIAL_K")
+    
+    model_config = {"env_prefix": ""}
+
+
 class AIConfig(BaseSettings):
     """AI and LLM integration configuration."""
     
@@ -158,23 +179,74 @@ class AIConfig(BaseSettings):
     gemini_max_tokens: int = Field(default=8192, env="GEMINI_MAX_TOKENS")
     gemini_temperature: float = Field(default=0.1, env="GEMINI_TEMPERATURE")
     
+    # Ollama configuration  
+    ollama_host: str = Field(default="localhost", env="OLLAMA_HOST")
+    ollama_port: int = Field(default=11434, env="OLLAMA_PORT")
+    ollama_model: str = Field(default="llama3.2:3b", env="OLLAMA_MODEL")
+    ollama_max_tokens: int = Field(default=8192, env="OLLAMA_MAX_TOKENS")
+    ollama_temperature: float = Field(default=0.1, env="OLLAMA_TEMPERATURE")
+    ollama_timeout: int = Field(default=120, env="OLLAMA_TIMEOUT")
+    
     # Feature flags
     enable_gemini: bool = Field(default=True, env="MIMIR_ENABLE_GEMINI")
     gemini_fallback: bool = Field(default=True, env="MIMIR_GEMINI_FALLBACK")
+    enable_ollama: bool = Field(default=True, env="MIMIR_ENABLE_OLLAMA")
     
-    # Vector embeddings (if using external service)
+    # Default LLM provider selection
+    default_llm_provider: str = Field(default="ollama", env="MIMIR_DEFAULT_LLM_PROVIDER")
+    
+    # Vector embeddings configuration
     embedding_service_url: str | None = Field(default=None, env="EMBEDDING_SERVICE_URL")
     embedding_model: str = Field(
         default="sentence-transformers/all-MiniLM-L6-v2",
         env="EMBEDDING_MODEL"
     )
     
+    # Enhanced embedding models for code
+    code_embedding_model: str = Field(
+        default="microsoft/codebert-base",
+        env="CODE_EMBEDDING_MODEL"
+    )
+    enable_code_embeddings: bool = Field(default=True, env="MIMIR_ENABLE_CODE_EMBEDDINGS")
+    
+    # RAPTOR hierarchical indexing configuration
+    enable_raptor: bool = Field(default=False, env="MIMIR_ENABLE_RAPTOR")
+    raptor_cluster_threshold: float = Field(default=0.1, env="RAPTOR_CLUSTER_THRESHOLD")
+    raptor_max_clusters: int = Field(default=10, env="RAPTOR_MAX_CLUSTERS")
+    raptor_summarization_model: str = Field(default="llama3.2:3b", env="RAPTOR_SUMMARIZATION_MODEL")
+    raptor_embedding_model: str = Field(
+        default="sentence-transformers/all-MiniLM-L6-v2",
+        env="RAPTOR_EMBEDDING_MODEL"
+    )
+    
+    # Query transformation configuration
+    query: QueryConfig = Field(default_factory=QueryConfig)
+    
+    # Reranking configuration  
+    reranker: RerankerConfig = Field(default_factory=RerankerConfig)
+    
+    # Legacy fields for backward compatibility
+    enable_hyde: bool = Field(default=False, env="MIMIR_ENABLE_HYDE")
+    hyde_model: str = Field(default="llama3.2:3b", env="HYDE_MODEL")
+    hyde_num_hypotheses: int = Field(default=3, env="HYDE_NUM_HYPOTHESES")
+    enable_reranking: bool = Field(default=False, env="MIMIR_ENABLE_RERANKING")
+    reranking_model: str = Field(
+        default="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        env="RERANKING_MODEL"
+    )
+    reranking_top_k: int = Field(default=20, env="RERANKING_TOP_K")
+    
     @property
     def api_key(self) -> str | None:
         """Get the API key, preferring GOOGLE_API_KEY over GEMINI_API_KEY."""
         return self.google_api_key or self.gemini_api_key
     
-    @field_validator("gemini_temperature")
+    @property 
+    def ollama_base_url(self) -> str:
+        """Get the full Ollama base URL."""
+        return f"http://{self.ollama_host}:{self.ollama_port}"
+    
+    @field_validator("gemini_temperature", "ollama_temperature", "raptor_cluster_threshold")
     @classmethod
     def validate_temperature(cls, v):
         """Validate temperature is in valid range."""
@@ -182,7 +254,7 @@ class AIConfig(BaseSettings):
             raise ValueError("Temperature must be between 0.0 and 2.0")
         return v
     
-    @field_validator("gemini_max_tokens")
+    @field_validator("gemini_max_tokens", "ollama_max_tokens")
     @classmethod
     def validate_max_tokens(cls, v):
         """Validate max tokens is reasonable."""
@@ -192,7 +264,22 @@ class AIConfig(BaseSettings):
             raise ValueError("Max tokens should not exceed 32768")
         return v
     
-    model_config = {"env_prefix": "GEMINI_"}
+    @field_validator("default_llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v):
+        """Validate LLM provider is supported."""
+        supported_providers = ["ollama", "gemini", "mock"]
+        if v not in supported_providers:
+            raise ValueError(f"LLM provider must be one of: {supported_providers}")
+        return v
+    
+    @field_validator("ollama_port")
+    @classmethod
+    def validate_ollama_port(cls, v):
+        """Validate Ollama port is in valid range."""
+        if not 1 <= v <= 65535:
+            raise ValueError("Port must be between 1 and 65535")
+        return v
 
 
 class MonitoringConfig(BaseSettings):

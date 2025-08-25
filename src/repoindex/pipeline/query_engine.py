@@ -197,23 +197,33 @@ class QueryEngine:
                         # This is a placeholder implementation - would integrate with actual search systems
                         start_time = time.time()
                         
-                        # TODO: Implement actual hybrid search logic here
-                        # This would use:
-                        # - indexed_repo.vector_index for vector search
-                        # - indexed_repo.serena_graph for symbol search  
-                        # - indexed_repo.repomap_data for graph-based search
-                        # - indexed_repo.snippets for context retrieval
+                        # Use enhanced search pipeline if available, otherwise hybrid search
+                        try:
+                            from .enhanced_search import EnhancedSearchPipeline
+                            search_engine = EnhancedSearchPipeline()
+                            await search_engine.initialize()
+                            logger.info("Using EnhancedSearchPipeline for search")
+                        except ImportError:
+                            logger.info("Enhanced search not available, using HybridSearchEngine")
+                            from .hybrid_search import HybridSearchEngine
+                            search_engine = HybridSearchEngine()
                         
-                        execution_time_ms = (time.time() - start_time) * 1000
-                        
-                        response = SearchResponse(
+                        # Execute search
+                        response = await search_engine.search(
                             query=query,
-                            results=[],  # Would be populated with actual results
-                            total_count=0,
-                            features_used=features,
-                            execution_time_ms=execution_time_ms,
-                            index_id=index_id,
+                            vector_index=indexed_repo.vector_index,
+                            serena_graph=indexed_repo.serena_graph,
+                            repomap=indexed_repo.repomap_data,
+                            repo_root=indexed_repo.repo_root,
+                            rev=indexed_repo.rev,
+                            features=features,
+                            k=k,
+                            context_lines=context_lines,
                         )
+                        
+                        # Set the index_id in response
+                        response.index_id = index_id
+                        execution_time_ms = response.execution_time_ms
 
                     enhanced_logger.operation_success(
                         "hybrid_search",

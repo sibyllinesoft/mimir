@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from ..data.schemas import AskResponse, Citation, CodeSnippet
 from ..util.errors import ExternalToolError, create_error_context
-from .llm_adapter import LLMAdapter, LLMError
+from .llm_adapter import LLMAdapter, LLMError, LLMModelInfo, LLMRequest, LLMResponse
 
 try:
     import google.generativeai as genai

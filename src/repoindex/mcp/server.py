@@ -702,8 +702,8 @@ class MCPServer:
 MimirMCPServer = MCPServer
 
 
-async def main() -> None:
-    """Main entry point for MCP server."""
+async def async_main() -> None:
+    """Async main entry point for MCP server."""
     setup_logging()
 
     # Create server instance
@@ -724,5 +724,42 @@ async def main() -> None:
         )
 
 
+def main() -> None:
+    """Synchronous main entry point for command line use."""
+    import argparse
+    import sys
+    
+    parser = argparse.ArgumentParser(
+        prog="mimir-server",
+        description="Mimir MCP Server - Deep Code Research System"
+    )
+    parser.add_argument(
+        "--version",
+        action="version", 
+        version="mimir-server 1.0.0"
+    )
+    parser.add_argument(
+        "--storage-dir",
+        type=str,
+        help="Directory for storing indexes and cache (default: ~/.cache/mimir)"
+    )
+    
+    args = parser.parse_args()
+    
+    # Set storage directory if provided
+    if args.storage_dir:
+        import os
+        os.environ['MIMIR_DATA_DIR'] = args.storage_dir
+    
+    try:
+        asyncio.run(async_main())
+    except KeyboardInterrupt:
+        print("Mimir server stopped by user", file=sys.stderr)
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error starting Mimir server: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
