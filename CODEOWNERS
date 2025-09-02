@@ -1,0 +1,31 @@
+# Repository code owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners
+* @mimir-development-team
+
+# Core architecture and security
+/src/repoindex/security/ @security-team
+/src/repoindex/mcp/ @mcp-team
+/src/repoindex/pipeline/ @pipeline-team
+
+# Infrastructure and deployment
+/ops/ @devops-team
+/docker-compose*.yml @devops-team
+/Dockerfile* @devops-team
+/.github/ @devops-team
+
+# Monitoring and observability
+/src/repoindex/monitoring/ @monitoring-team
+/monitoring_config.yaml @monitoring-team
+/scripts/trace_viewer.py @monitoring-team
+/scripts/setup_monitoring.py @monitoring-team
+
+# Documentation
+/docs/ @docs-team
+/*.md @docs-team
+
+# Dependencies and configuration
+/pyproject.toml @maintainers
+/requirements.txt @maintainers
+/uv.lock @maintainers
