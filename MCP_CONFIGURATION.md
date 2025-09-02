@@ -8,9 +8,11 @@
 
 ## ⚡ 30-Second Setup
 
-### Step 1: Install Mimir
+### Step 1: Set Up Mimir
 ```bash
-pip install mimir
+# Clone and set up
+git clone https://github.com/your-org/mimir.git && cd mimir
+python setup.py
 ```
 
 ### Step 2: Add to Claude Desktop
@@ -24,8 +26,9 @@ Add this configuration:
 {
   "mcpServers": {
     "mimir": {
-      "command": "mimir-server",
-      "args": [],
+      "command": "uv",
+      "args": ["run", "python", "-m", "repoindex.mcp.server"],
+      "cwd": "/path/to/your/mimir",
       "env": {
         "MIMIR_LOG_LEVEL": "INFO"
       }

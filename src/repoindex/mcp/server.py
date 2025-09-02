@@ -13,16 +13,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from mcp.server import Server
-from mcp.server.lowlevel.server import NotificationOptions
+from mcp.server import Server, NotificationOptions, stdio_server
 from mcp.server.models import InitializationOptions
-from mcp.server.stdio import stdio_server
 from mcp.types import (
     BlobResourceContents,
-    CallToolResult,
     ReadResourceResult,
     Resource,
-    TextContent,
     TextResourceContents,
     Tool,
 )
@@ -89,19 +85,22 @@ class MCPServer:
             return tools
 
         @self.server.call_tool()
-        async def call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult:
+        async def call_tool(name: str, arguments: dict[str, Any]):
             """Handle tool calls."""
             try:
                 handler = self._get_tool_handler(name)
                 if not handler:
                     raise ValueError(f"Unknown tool: {name}")
                 
-                return await handler(arguments)
+                # Call handler and return MCP TextContent objects directly
+                result = await handler(arguments)
+                
+                from mcp.types import TextContent
+                return [TextContent(type="text", text=str(result))]
             except Exception as e:
                 logger.exception(f"Error in tool {name}: {e}")
-                return CallToolResult(
-                    content=[TextContent(type="text", text=f"Error: {str(e)}")], isError=True
-                )
+                from mcp.types import TextContent
+                return [TextContent(type="text", text=f"Error: {str(e)}")]
 
     def _get_tool_definitions(self) -> list[Tool]:
         """Get standardized tool definitions."""
@@ -411,7 +410,7 @@ class MCPServer:
         else:
             raise ValueError(f"Unknown mimir resource: {resource_name}")
 
-    async def _ensure_repo_index(self, arguments: dict[str, Any]) -> CallToolResult:
+    async def _ensure_repo_index(self, arguments: dict[str, Any]) -> str:
         """Handle ensure_repo_index tool call."""
         try:
             request = EnsureRepoIndexRequest(**arguments)
@@ -436,21 +435,16 @@ class MCPServer:
                 index_id=index_id, status_uri=status_uri, manifest_uri=manifest_uri
             )
 
-            return CallToolResult(
-                content=[TextContent(type="text", text=json.dumps(response.model_dump(), indent=2))]
-            )
+            # Return JSON string directly - MCP framework will wrap it
+            return json.dumps(response.model_dump(), indent=2)
 
         except ValidationError as e:
-            return CallToolResult(
-                content=[TextContent(type="text", text=f"Validation error: {e}")], isError=True
-            )
+            raise Exception(f"Validation error: {e}")
         except Exception as e:
             logger.exception(f"Error in ensure_repo_index: {e}")
-            return CallToolResult(
-                content=[TextContent(type="text", text=f"Error: {str(e)}")], isError=True
-            )
+            raise
 
-    async def _get_repo_bundle(self, arguments: dict[str, Any]) -> CallToolResult:
+    async def _get_repo_bundle(self, arguments: dict[str, Any]) -> str:
         """Handle get_repo_bundle tool call."""
         try:
             request = GetRepoBundleRequest(**arguments)
@@ -468,16 +462,13 @@ class MCPServer:
 
             response = GetRepoBundleResponse(bundle_uri=bundle_uri, manifest_uri=manifest_uri)
 
-            return CallToolResult(
-                content=[TextContent(type="text", text=json.dumps(response.model_dump(), indent=2))]
-            )
+            return json.dumps(response.model_dump(), indent=2)
 
         except Exception as e:
-            return CallToolResult(
-                content=[TextContent(type="text", text=f"Error: {str(e)}")], isError=True
-            )
+            logger.exception(f"Error in tool: {e}")
+            raise
 
-    async def _search_repo(self, arguments: dict[str, Any]) -> CallToolResult:
+    async def _search_repo(self, arguments: dict[str, Any]) -> str:
         """Handle search_repo tool call."""
         try:
             request = SearchRepoRequest(**arguments)
@@ -491,20 +482,13 @@ class MCPServer:
                 context_lines=request.context_lines,
             )
 
-            return CallToolResult(
-                content=[
-                    TextContent(
-                        type="text", text=json.dumps(response.model_dump(), indent=2, default=str)
-                    )
-                ]
-            )
+            return json.dumps(response.model_dump(), indent=2, default=str)
 
         except Exception as e:
-            return CallToolResult(
-                content=[TextContent(type="text", text=f"Error: {str(e)}")], isError=True
-            )
+            logger.exception(f"Error in tool: {e}")
+            raise
 
-    async def _ask_index(self, arguments: dict[str, Any]) -> CallToolResult:
+    async def _ask_index(self, arguments: dict[str, Any]) -> str:
         """Handle ask_index tool call."""
         try:
             request = AskIndexRequest(**arguments)
@@ -516,20 +500,13 @@ class MCPServer:
                 context_lines=request.context_lines,
             )
 
-            return CallToolResult(
-                content=[
-                    TextContent(
-                        type="text", text=json.dumps(response.model_dump(), indent=2, default=str)
-                    )
-                ]
-            )
+            return json.dumps(response.model_dump(), indent=2, default=str)
 
         except Exception as e:
-            return CallToolResult(
-                content=[TextContent(type="text", text=f"Error: {str(e)}")], isError=True
-            )
+            logger.exception(f"Error in tool: {e}")
+            raise
 
-    async def _cancel(self, arguments: dict[str, Any]) -> CallToolResult:
+    async def _cancel(self, arguments: dict[str, Any]) -> str:
         """Handle cancel tool call."""
         try:
             request = CancelRequest(**arguments)
@@ -543,14 +520,11 @@ class MCPServer:
                 del self.pipelines[request.index_id]
                 response = CancelResponse(ok=True, message="Pipeline cancelled")
 
-            return CallToolResult(
-                content=[TextContent(type="text", text=json.dumps(response.model_dump(), indent=2))]
-            )
+            return json.dumps(response.model_dump(), indent=2)
 
         except Exception as e:
-            return CallToolResult(
-                content=[TextContent(type="text", text=f"Error: {str(e)}")], isError=True
-            )
+            logger.exception(f"Error in tool: {e}")
+            raise
 
     async def _get_status_resource(self, index_id: str, index_dir: Path) -> ReadResourceResult:
         """Get pipeline status resource."""

@@ -4,7 +4,7 @@
 
 [![Research-Backed](https://img.shields.io/badge/research-RAPTOR%20%2B%20HyDE-purple)](#scientific-foundations)
 [![Claude Ready](https://img.shields.io/badge/Claude-MCP%20Compatible-blue)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-93%2F93%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-baseline%20passing-yellow)](tests/)
 [![Performance](https://img.shields.io/badge/performance-51.9%25%20optimized-orange)](#performance)
 [![Security](https://img.shields.io/badge/security-production%20ready-green)](#security)
 
@@ -26,7 +26,7 @@
 
 **🚀 Production-Grade Performance**
 - **51.9% faster** than baseline implementations
-- **CPU-only** architecture - no GPU dependencies
+- **CPU-only** architecture with **optional GPU acceleration** via Lens
 - **Concurrent processing** with intelligent resource management
 
 **🛡️ Enterprise Security**
@@ -43,7 +43,7 @@
 - **📊 Real-time Analytics**: Optional web interface with interactive visualization
 - **🏗️ Six-Stage Pipeline**: Acquire → RepoMapper → Serena → LEANN → Snippets → Bundle
 - **🔌 MCP Protocol**: Model Context Protocol interface with 5 tools and 4 resources
-- **💻 CPU-Only**: No GPU dependencies, defensible citations
+- **💻 Flexible Acceleration**: CPU-only by default, optional GPU via Lens service
 
 ### Production Features
 - **🛡️ Security Hardening**: Authentication, sandboxing, encryption, audit logging
@@ -57,8 +57,9 @@
 ### Method 1: Claude Desktop (Recommended)
 
 ```bash
-# 1. Install Mimir
-pip install mimir
+# 1. Clone and set up Mimir
+git clone https://github.com/your-org/mimir.git && cd mimir
+python setup.py
 
 # 2. Add to Claude Desktop config
 # File: ~/Library/Application Support/Claude/claude_desktop_config.json (macOS)
@@ -66,8 +67,9 @@ pip install mimir
 {
   "mcpServers": {
     "mimir": {
-      "command": "mimir-server",
-      "args": []
+      "command": "uv",
+      "args": ["run", "python", "-m", "repoindex.mcp.server"],
+      "cwd": "/path/to/mimir"
     }
   }
 }
@@ -949,6 +951,38 @@ The MCP API provides 5 tools and 4 resource types:
 - Human-readable logs and activity streams
 - Compressed bundles for backup/sharing
 
+## ⚡ GPU Acceleration (via Lens)
+
+Mimir supports GPU acceleration through the Lens service for significantly improved performance:
+
+### GPU Configuration
+
+```bash
+# Enable GPU preference in Lens configuration
+export LENS_PREFER_GPU=true
+export LENS_GPU_DEVICE_ID=0
+export LENS_GPU_BATCH_SIZE=32
+export LENS_GPU_MEMORY_LIMIT=4GB
+
+# Use GPU-optimized embedding models
+export LENS_GPU_EMBEDDING_MODEL=BAAI/bge-large-en-v1.5
+export LENS_CPU_FALLBACK_MODEL=all-MiniLM-L6-v2
+```
+
+### Prerequisites for GPU Support
+
+1. **Lens service with GPU support** (configure Lens first)
+2. **CUDA-compatible GPU** with 4GB+ VRAM
+3. **NVIDIA drivers** and CUDA toolkit installed
+
+### Automatic Fallback
+
+Mimir automatically falls back to CPU processing if:
+- GPU is not available
+- Lens service doesn't support GPU
+- GPU memory is insufficient
+- Connection to GPU-enabled Lens fails
+
 ## 🧪 Testing
 
 Comprehensive test suite with high coverage:
@@ -974,10 +1008,10 @@ uv run pytest --cov=src/repoindex --cov-report=html
 ```
 
 **Test Statistics:**
-- **93/93 tests passing** (100% success rate)
-- **85%+ code coverage** across all modules
-- **17 test files** with comprehensive scenarios
-- **6,892 lines** of test code
+- **Core functionality tests passing** - Essential operations validated
+- **Comprehensive test suite** with unit, integration, and performance tests  
+- **17+ test files** covering critical functionality
+- **Active development** - Test coverage and reliability improvements ongoing
 
 Test categories:
 - Unit tests for individual components

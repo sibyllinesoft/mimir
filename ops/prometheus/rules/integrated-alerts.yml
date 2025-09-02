@@ -1,0 +1,352 @@
+# Integrated Alert Rules for Mimir-Lens System
+# Production-ready alerting rules with appropriate thresholds
+
+groups:
+  # ==========================================================================
+  # HIGH PRIORITY ALERTS - SERVICE AVAILABILITY
+  # ==========================================================================
+  
+  - name: service_availability
+    interval: 30s
+    rules:
+      # Mimir Service Down
+      - alert: MimirServiceDown
+        expr: up{job="mimir-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mimir
+          component: mcp-server
+        annotations:
+          summary: "Mimir MCP server is down"
+          description: "Mimir service has been down for more than 1 minute. This affects all code analysis capabilities."
+          runbook_url: "https://docs.your-domain.com/runbooks/mimir-service-down"
+
+      # Lens Service Down
+      - alert: LensServiceDown
+        expr: up{job="lens-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: lens
+          component: search-engine
+        annotations:
+          summary: "Lens search service is down"
+          description: "Lens service has been down for more than 1 minute. This affects search and indexing performance."
+          runbook_url: "https://docs.your-domain.com/runbooks/lens-service-down"
+
+      # Database Connection Lost
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: postgresql
+        annotations:
+          summary: "PostgreSQL database is unreachable"
+          description: "Database connection has been lost for more than 2 minutes."
+
+      # Redis Cache Down
+      - alert: RedisCacheDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis cache is unavailable"
+          description: "Redis cache has been unavailable for more than 2 minutes. Performance may be degraded."
+
+      # NATS Message Queue Down
+      - alert: NatsQueueDown
+        expr: up{job="nats"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: nats
+        annotations:
+          summary: "NATS message queue is down"
+          description: "NATS queue has been down for more than 1 minute. This affects distributed processing."
+
+  # ==========================================================================
+  # PERFORMANCE ALERTS - RESPONSE TIME & THROUGHPUT
+  # ==========================================================================
+  
+  - name: performance_alerts
+    interval: 15s
+    rules:
+      # High Response Time - Mimir
+      - alert: MimirHighResponseTime
+        expr: histogram_quantile(0.95, rate(mimir_request_duration_seconds_bucket[5m])) > 5.0
+        for: 2m
+        labels:
+          severity: warning
+          service: mimir
+        annotations:
+          summary: "Mimir response time is high"
+          description: "95th percentile response time is {{ $value }}s, which exceeds the 5s threshold."
+
+      # High Response Time - Lens
+      - alert: LensHighResponseTime
+        expr: histogram_quantile(0.95, rate(lens_request_duration_seconds_bucket[5m])) > 2.0
+        for: 2m
+        labels:
+          severity: warning
+          service: lens
+        annotations:
+          summary: "Lens response time is high"
+          description: "95th percentile response time is {{ $value }}s, which exceeds the 2s threshold."
+
+      # High Error Rate - Mimir
+      - alert: MimirHighErrorRate
+        expr: rate(mimir_requests_total{status=~"5.."}[5m]) / rate(mimir_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: mimir
+        annotations:
+          summary: "Mimir error rate is high"
+          description: "Error rate is {{ $value | humanizePercentage }}, which exceeds 5% threshold."
+
+      # High Error Rate - Lens
+      - alert: LensHighErrorRate
+        expr: rate(lens_requests_total{status=~"5.."}[5m]) / rate(lens_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: lens
+        annotations:
+          summary: "Lens error rate is high"
+          description: "Error rate is {{ $value | humanizePercentage }}, which exceeds 5% threshold."
+
+      # Low Throughput
+      - alert: LowRequestThroughput
+        expr: rate(mimir_requests_total[5m]) < 1
+        for: 5m
+        labels:
+          severity: info
+          service: mimir
+        annotations:
+          summary: "Mimir request throughput is low"
+          description: "Request rate is {{ $value }} req/s, which may indicate low usage or issues."
+
+  # ==========================================================================
+  # RESOURCE ALERTS - CPU, MEMORY, DISK
+  # ==========================================================================
+  
+  - name: resource_alerts
+    interval: 30s
+    rules:
+      # High CPU Usage - Mimir
+      - alert: MimirHighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{name=~"mimir-.*"}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: mimir
+        annotations:
+          summary: "Mimir CPU usage is high"
+          description: "CPU usage is {{ $value }}%, which exceeds 80% threshold."
+
+      # High CPU Usage - Lens
+      - alert: LensHighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{name=~"lens-.*"}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: lens
+        annotations:
+          summary: "Lens CPU usage is high"
+          description: "CPU usage is {{ $value }}%, which exceeds 80% threshold."
+
+      # High Memory Usage - Mimir
+      - alert: MimirHighMemoryUsage
+        expr: container_memory_usage_bytes{name=~"mimir-.*"} / container_spec_memory_limit_bytes{name=~"mimir-.*"} * 100 > 85
+        for: 3m
+        labels:
+          severity: warning
+          service: mimir
+        annotations:
+          summary: "Mimir memory usage is high"
+          description: "Memory usage is {{ $value }}% of limit, which exceeds 85% threshold."
+
+      # High Memory Usage - Lens
+      - alert: LensHighMemoryUsage
+        expr: container_memory_usage_bytes{name=~"lens-.*"} / container_spec_memory_limit_bytes{name=~"lens-.*"} * 100 > 85
+        for: 3m
+        labels:
+          severity: warning
+          service: lens
+        annotations:
+          summary: "Lens memory usage is high"
+          description: "Memory usage is {{ $value }}% of limit, which exceeds 85% threshold."
+
+      # High Disk Usage
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage is high"
+          description: "Disk usage on {{ $labels.device }} is {{ $value }}%, which exceeds 90% threshold."
+
+  # ==========================================================================
+  # DATABASE ALERTS
+  # ==========================================================================
+  
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # High Database Connection Usage
+      - alert: HighDatabaseConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 3m
+        labels:
+          severity: warning
+          service: postgresql
+        annotations:
+          summary: "High database connection usage"
+          description: "Database connection usage is {{ $value }}%, which exceeds 80% threshold."
+
+      # Long Running Queries
+      - alert: LongRunningQueries
+        expr: pg_stat_activity_max_tx_duration > 300
+        for: 1m
+        labels:
+          severity: warning
+          service: postgresql
+        annotations:
+          summary: "Long running database queries detected"
+          description: "Longest running query has been active for {{ $value }} seconds."
+
+      # Database Locks
+      - alert: DatabaseLocks
+        expr: pg_locks_count > 100
+        for: 2m
+        labels:
+          severity: warning
+          service: postgresql
+        annotations:
+          summary: "High number of database locks"
+          description: "Current lock count is {{ $value }}, which may indicate contention."
+
+  # ==========================================================================
+  # CACHE ALERTS
+  # ==========================================================================
+  
+  - name: cache_alerts
+    interval: 30s
+    rules:
+      # High Redis Memory Usage
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_config_maxmemory * 100 > 90
+        for: 3m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is {{ $value }}%, which exceeds 90% threshold."
+
+      # High Redis Eviction Rate
+      - alert: RedisHighEvictionRate
+        expr: rate(redis_evicted_keys_total[5m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis key eviction rate is high"
+          description: "Redis is evicting {{ $value }} keys/second, which may indicate memory pressure."
+
+      # Low Redis Hit Rate
+      - alert: RedisLowHitRate
+        expr: redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) * 100 < 80
+        for: 5m
+        labels:
+          severity: info
+          service: redis
+        annotations:
+          summary: "Redis hit rate is low"
+          description: "Redis hit rate is {{ $value }}%, which is below 80% threshold."
+
+  # ==========================================================================
+  # INTEGRATION ALERTS
+  # ==========================================================================
+  
+  - name: integration_alerts
+    interval: 60s
+    rules:
+      # Lens Integration Health
+      - alert: LensIntegrationUnhealthy
+        expr: mimir_lens_health_check_success == 0
+        for: 3m
+        labels:
+          severity: warning
+          service: integration
+        annotations:
+          summary: "Mimir-Lens integration is unhealthy"
+          description: "Health check between Mimir and Lens services has been failing."
+
+      # High Integration Latency
+      - alert: HighIntegrationLatency
+        expr: histogram_quantile(0.95, rate(mimir_lens_request_duration_seconds_bucket[5m])) > 3.0
+        for: 3m
+        labels:
+          severity: warning
+          service: integration
+        annotations:
+          summary: "High latency in Mimir-Lens integration"
+          description: "95th percentile integration latency is {{ $value }}s, exceeding 3s threshold."
+
+      # External API Failures
+      - alert: ExternalAPIFailures
+        expr: rate(mimir_external_api_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: external-api
+        annotations:
+          summary: "High rate of external API failures"
+          description: "External API error rate is {{ $value }} errors/second."
+
+  # ==========================================================================
+  # MONITORING SYSTEM HEALTH
+  # ==========================================================================
+  
+  - name: monitoring_health
+    interval: 60s
+    rules:
+      # Prometheus Scrape Failures
+      - alert: PrometheusScrapeFailing
+        expr: up == 0
+        for: 3m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "Prometheus cannot scrape {{ $labels.job }}"
+          description: "Prometheus has been unable to scrape {{ $labels.job }} for more than 3 minutes."
+
+      # High Prometheus Disk Usage
+      - alert: PrometheusHighDiskUsage
+        expr: prometheus_tsdb_wal_size_bytes > 1000000000
+        for: 5m
+        labels:
+          severity: warning
+          service: prometheus
+        annotations:
+          summary: "Prometheus WAL size is large"
+          description: "Prometheus WAL size is {{ $value | humanizeBytes }}, which may indicate issues."
+
+      # Missing Metrics
+      - alert: MissingApplicationMetrics
+        expr: absent(up{job="mimir-server"}) or absent(up{job="lens-server"})
+        for: 5m
+        labels:
+          severity: critical
+          service: monitoring
+        annotations:
+          summary: "Critical application metrics are missing"
+          description: "Essential application metrics are not being collected."

@@ -60,6 +60,27 @@ from .snippets import SnippetExtractor
 from .query_engine import IndexedRepository, QueryEngine
 
 
+def get_language_extensions(language: str) -> list[str]:
+    """Map language names to file extensions."""
+    language_map = {
+        "typescript": ["ts", "tsx", "js", "jsx", "md", "mdx", "json", "yaml"],
+        "ts": ["ts", "tsx", "js", "jsx", "md", "mdx", "json", "yaml"], 
+        "javascript": ["js", "jsx", "ts", "tsx", "md", "mdx", "json", "yaml"],
+        "js": ["js", "jsx", "ts", "tsx", "md", "mdx", "json", "yaml"],
+        "python": ["py", "pyi", "pyx", "pxd", "py3", "md", "rst", "txt", "yaml", "yml", "json", "toml", "cfg", "ini"],
+        "py": ["py", "pyi", "pyx", "pxd", "py3", "md", "rst", "txt", "yaml", "yml", "json", "toml", "cfg", "ini"],
+        "rust": ["rs", "toml", "md", "yaml", "yml", "json"],
+        "rs": ["rs", "toml", "md", "yaml", "yml", "json"],
+        "go": ["go", "mod", "sum", "md", "yaml", "yml", "json"],
+        "java": ["java", "kt", "kts", "scala", "groovy", "xml", "md", "yaml", "yml", "json"],
+        "cpp": ["cpp", "cc", "cxx", "c", "h", "hpp", "hxx", "cmake", "md", "yaml", "yml", "json"],
+        "c": ["c", "h", "cmake", "md", "yaml", "yml", "json"],
+    }
+    
+    # Default to typescript extensions if language not found
+    return language_map.get(language.lower(), language_map["ts"])
+
+
 class PipelineContext:
     """Context object shared across pipeline stages."""
 
@@ -145,8 +166,11 @@ class IndexingPipeline:
 
         repo_info = RepoInfo(root=str(repo_root), rev=head_commit, worktree_dirty=is_dirty)
 
-        # Create index configuration
-        config = IndexConfig(**(index_opts or {}))
+        # Create index configuration with language-specific extensions
+        config_opts = index_opts or {}
+        if "languages" not in config_opts:
+            config_opts["languages"] = get_language_extensions(language)
+        config = IndexConfig(**config_opts)
 
         # Set up working directory
         index_dir = get_index_directory(self.storage_dir, index_id)

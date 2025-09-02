@@ -1,0 +1,152 @@
+# Docker Compose for Mimir Deep Research Monitoring Stack
+# This compose file sets up the complete monitoring infrastructure:
+# - NATS JetStream for trace emission and streaming
+# - Mimir monitored server with Skald integration
+# - Optional Grafana and Prometheus for dashboards
+
+version: '3.8'
+
+services:
+  # NATS JetStream server for trace streaming
+  nats:
+    image: nats:2.10-alpine
+    container_name: mimir-nats
+    ports:
+      - "4222:4222"    # NATS client port
+      - "8222:8222"    # HTTP monitoring port
+      - "6222:6222"    # Cluster port
+    command:
+      - "--jetstream"
+      - "--store_dir=/data"
+      - "--http_port=8222"
+      - "--max_memory_store=1GB"
+      - "--max_file_store=10GB"
+    volumes:
+      - nats_data:/data
+    networks:
+      - mimir_monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8222/varz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Mimir monitored server with Skald + NATS integration
+  mimir-monitored:
+    build:
+      context: .
+      dockerfile: Dockerfile.monitoring
+    container_name: mimir-monitored-server
+    environment:
+      - MIMIR_DATA_DIR=/app/data
+      - NATS_URL=nats://nats:4222
+      - PYTHONPATH=/app/src
+      - SKALD_ENABLED=true
+      - MIMIR_LOG_LEVEL=INFO
+    volumes:
+      - ./src:/app/src:ro
+      - mimir_data:/app/data
+      - ./monitoring_config.yaml:/app/monitoring_config.yaml:ro
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks:
+      - mimir_monitoring
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # Trace viewer for real-time monitoring
+  trace-viewer:
+    build:
+      context: .
+      dockerfile: Dockerfile.monitoring
+    container_name: mimir-trace-viewer
+    environment:
+      - NATS_URL=nats://nats:4222
+      - PYTHONPATH=/app/src
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./src:/app/src:ro
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks:
+      - mimir_monitoring
+    command: python /app/scripts/trace_viewer.py --nats-url nats://nats:4222
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # Optional: Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mimir-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    networks:
+      - mimir_monitoring
+    profiles:
+      - "metrics"
+
+  # Optional: Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mimir-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=mimir123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./monitoring/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - mimir_monitoring
+    profiles:
+      - "metrics"
+
+  # NATS monitoring and management UI
+  nats-streaming-ui:
+    image: natsio/nats-streaming-ui:latest
+    container_name: mimir-nats-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - NATS_STREAMING_SERVER_URL=nats://nats:4222
+    depends_on:
+      - nats
+    networks:
+      - mimir_monitoring
+    profiles:
+      - "ui"
+
+volumes:
+  nats_data:
+    name: mimir_nats_data
+  mimir_data:
+    name: mimir_monitoring_data  
+  prometheus_data:
+    name: mimir_prometheus_data
+  grafana_data:
+    name: mimir_grafana_data
+
+networks:
+  mimir_monitoring:
+    name: mimir_monitoring_network
+    driver: bridge

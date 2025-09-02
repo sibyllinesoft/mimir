@@ -412,6 +412,90 @@ class DatabaseConfig(BaseSettings):
     model_config = {"env_prefix": ""}
 
 
+class LensConfig(BaseSettings):
+    """Lens indexing service integration configuration."""
+    
+    # Lens service connection
+    enabled: bool = Field(default=False, env="LENS_ENABLED")
+    base_url: str = Field(default="http://localhost:3001", env="LENS_BASE_URL")
+    api_key: str | None = Field(default=None, env="LENS_API_KEY")
+    
+    # Connection settings
+    timeout: int = Field(default=30, env="LENS_TIMEOUT")
+    max_retries: int = Field(default=3, env="LENS_MAX_RETRIES")
+    retry_delay: float = Field(default=1.0, env="LENS_RETRY_DELAY")
+    
+    # Health check settings
+    health_check_enabled: bool = Field(default=True, env="LENS_HEALTH_CHECK_ENABLED")
+    health_check_interval: int = Field(default=60, env="LENS_HEALTH_CHECK_INTERVAL")
+    health_check_timeout: int = Field(default=10, env="LENS_HEALTH_CHECK_TIMEOUT")
+    
+    # Fallback behavior
+    fallback_enabled: bool = Field(default=True, env="LENS_FALLBACK_ENABLED")
+    fallback_to_local: bool = Field(default=True, env="LENS_FALLBACK_TO_LOCAL")
+    
+    # Performance settings
+    connection_pool_size: int = Field(default=10, env="LENS_CONNECTION_POOL_SIZE")
+    keep_alive_timeout: int = Field(default=30, env="LENS_KEEP_ALIVE_TIMEOUT")
+    
+    # Integration features
+    enable_indexing: bool = Field(default=True, env="LENS_ENABLE_INDEXING")
+    enable_search: bool = Field(default=True, env="LENS_ENABLE_SEARCH")
+    enable_embeddings: bool = Field(default=True, env="LENS_ENABLE_EMBEDDINGS")
+    
+    # GPU acceleration settings (for future Lens GPU support)
+    prefer_gpu: bool = Field(default=False, env="LENS_PREFER_GPU")
+    gpu_device_id: int = Field(default=0, env="LENS_GPU_DEVICE_ID") 
+    gpu_memory_limit: str = Field(default="auto", env="LENS_GPU_MEMORY_LIMIT")
+    gpu_batch_size: int = Field(default=32, env="LENS_GPU_BATCH_SIZE")
+    
+    # GPU model preferences (when Lens supports GPU)
+    gpu_embedding_model: str = Field(default="BAAI/bge-large-en-v1.5", env="LENS_GPU_EMBEDDING_MODEL")
+    cpu_fallback_model: str = Field(default="all-MiniLM-L6-v2", env="LENS_CPU_FALLBACK_MODEL")
+    
+    @field_validator("timeout", "health_check_timeout")
+    @classmethod
+    def validate_timeouts(cls, v):
+        """Validate timeouts are reasonable."""
+        if v <= 0:
+            raise ValueError("Timeout must be positive")
+        if v > 300:  # 5 minutes max
+            raise ValueError("Timeout should not exceed 300 seconds")
+        return v
+    
+    @field_validator("max_retries")
+    @classmethod
+    def validate_max_retries(cls, v):
+        """Validate max retries is reasonable."""
+        if v < 0:
+            raise ValueError("Max retries cannot be negative")
+        if v > 10:
+            raise ValueError("Max retries should not exceed 10")
+        return v
+    
+    @field_validator("retry_delay")
+    @classmethod
+    def validate_retry_delay(cls, v):
+        """Validate retry delay is reasonable."""
+        if v < 0.1:
+            raise ValueError("Retry delay must be at least 0.1 seconds")
+        if v > 60.0:
+            raise ValueError("Retry delay should not exceed 60 seconds")
+        return v
+    
+    @field_validator("connection_pool_size")
+    @classmethod
+    def validate_pool_size(cls, v):
+        """Validate connection pool size is reasonable."""
+        if v <= 0:
+            raise ValueError("Connection pool size must be positive")
+        if v > 100:
+            raise ValueError("Connection pool size should not exceed 100")
+        return v
+    
+    model_config = {"env_prefix": "LENS_"}
+
+
 class DevelopmentConfig(BaseSettings):
     """Development and testing configuration."""
     
@@ -460,6 +544,7 @@ class MimirConfig(BaseSettings):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    lens: LensConfig = Field(default_factory=LensConfig)
     development: DevelopmentConfig = Field(default_factory=DevelopmentConfig)
     container: ContainerConfig = Field(default_factory=ContainerConfig)
     
@@ -553,6 +638,13 @@ class MimirConfig(BaseSettings):
         
         if self.ai.enable_gemini and not self.ai.api_key:
             warnings.append("Gemini enabled but no API key configured")
+        
+        # Validate Lens configuration
+        if self.lens.enabled and not self.lens.base_url:
+            warnings.append("Lens integration enabled but no base URL configured")
+        
+        if self.lens.enabled and not self.lens.health_check_enabled:
+            warnings.append("Lens integration enabled but health checks disabled - recommended to enable")
         
         # Validate storage paths are accessible
         try:
@@ -744,6 +836,11 @@ def get_development_config() -> DevelopmentConfig:
 def get_container_config() -> ContainerConfig:
     """Get container configuration."""
     return get_config().container
+
+
+def get_lens_config() -> LensConfig:
+    """Get Lens integration configuration."""
+    return get_config().lens
 
 
 # Configuration validation and management

@@ -25,8 +25,8 @@ classifiers = [
 
 # Core runtime dependencies with security annotations
 dependencies = [
-    # Core MCP Framework - Mission Critical
-    "mcp==1.13.1",  # Security: Actively maintained, last security audit: 2024-Q4
+    # Core MCP Framework - Mission Critical  
+    "mcp>=1.0.0,<2.0.0",  # Security: Actively maintained, compatible with Claude Code
     
     # Web Framework Stack - High Security Priority
     "fastapi>=0.116.1,<0.117.0",  # Security: Known CVE fixes in 0.116+
@@ -63,6 +63,9 @@ dependencies = [
     
     # HTTP client for Ollama and other services
     "aiohttp>=3.11.10,<4.0.0",  # Security: Async HTTP client with security fixes
+    
+    # Monitoring and tracing
+    "sibylline-skald>=0.2.0,<1.0.0",  # Universal execution monitoring with NATS support
 ]
 
 [project.optional-dependencies]
@@ -97,6 +100,7 @@ monitoring = [
     "prometheus-client>=0.21.1,<1.0.0",
     "structlog>=24.4.0,<25.0.0",
     "sentry-sdk>=2.19.2,<3.0.0",
+    "nats-py>=2.10.0,<3.0.0",  # NATS JetStream for agent trace streaming
 ]
 
 # Security scanning and validation tools
@@ -124,6 +128,7 @@ docs = [
 
 [project.scripts]
 mimir-server = "repoindex.mcp.server:main"
+mimir-monitored-server = "repoindex.mcp.monitored_server:main"
 mimir-ui = "repoindex.ui.app:main"
 
 [build-system]
@@ -194,6 +199,8 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "benchmark: marks tests as benchmark tests",
+    "performance: marks tests as performance tests",
 ]
 asyncio_mode = "auto"
 

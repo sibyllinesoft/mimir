@@ -13,23 +13,25 @@
 **Perfect for:** Individual developers who want instant code intelligence in Claude Desktop
 
 ```bash
-# 1. One-line install
-pip install mimir
+# 1. Clone and set up
+git clone https://github.com/your-org/mimir.git && cd mimir
+python setup.py
 
-# 2. Auto-configure (optional)
-mimir-configure-claude
-
-# 3. Manual config: Add to claude_desktop_config.json
+# 2. Configure Claude Desktop
+# Add to claude_desktop_config.json:
+# File: ~/Library/Application Support/Claude/claude_desktop_config.json (macOS)
+#       %APPDATA%\Claude\claude_desktop_config.json (Windows)
 {
   "mcpServers": {
     "mimir": {
-      "command": "mimir-server",
-      "args": []
+      "command": "uv",
+      "args": ["run", "python", "-m", "repoindex.mcp.server"],
+      "cwd": "/path/to/mimir"
     }
   }
 }
 
-# 4. Restart Claude Desktop → Start asking code questions! 🎉
+# 3. Restart Claude Desktop → Start asking code questions! 🎉
 ```
 
 **✅ You get:** Native Claude integration, zero-config setup, instant code search
@@ -39,15 +41,19 @@ mimir-configure-claude
 **Perfect for:** Developers who want API access, web UI, or integration with other tools
 
 ```bash
-# Install with web UI support
-pip install mimir[ui]
+# Clone and set up development environment
+git clone https://github.com/your-org/mimir.git && cd mimir
+python setup.py
 
-# Start the full-featured server
-mimir-server --enable-ui --enable-api
+# Start MCP server (for programmatic access)
+uv run python -m repoindex.mcp.server
+
+# OR start web UI (for interactive exploration)  
+uv run python -m repoindex.ui.app
 
 # Access your tools
 # 🔧 MCP Server: stdio interface for programmatic access
-# 🌐 Web UI: http://localhost:8080 for interactive exploration  
+# 🌐 Web UI: http://localhost:8000 for interactive exploration  
 # 📡 API: http://localhost:8000/api for custom integrations
 ```
 

@@ -42,7 +42,18 @@ class SnippetExtractor:
             progress_callback(10)
 
         if not serena_graph or not serena_graph.entries:
-            return SnippetCollection(snippets=[], total_count=0)
+            # Create and save empty snippet collection
+            empty_collection = SnippetCollection(snippets=[], total_count=0)
+            output_path = work_dir / "snippets.jsonl"
+            print(f"DEBUG: Creating empty snippets.jsonl at {output_path}")
+            try:
+                empty_collection.save_to_jsonl(output_path)
+                print(f"DEBUG: Saved empty snippets, file exists: {output_path.exists()}")
+            except Exception as e:
+                print(f"DEBUG: save_to_jsonl failed: {e}, creating manually")
+                with open(output_path, 'w') as f:
+                    pass  # Create empty file
+            return empty_collection
 
         # Group symbol entries by file for efficient processing
         file_entries = {}

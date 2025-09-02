@@ -1,0 +1,269 @@
+# Prometheus Configuration for Mimir-Lens Integrated System
+# Comprehensive metrics collection for production monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    monitor: 'mimir-lens-integrated'
+    environment: '${DEPLOYMENT_ENV:-production}'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      timeout: 10s
+      api_version: v2
+
+# Rules configuration
+rule_files:
+  - "rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ==========================================================================
+  # CORE APPLICATION SERVICES
+  # ==========================================================================
+  
+  # Mimir MCP Server Metrics
+  - job_name: 'mimir-server'
+    static_configs:
+      - targets: ['mimir:9100']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'mimir-server'
+      - source_labels: [__name__]
+        regex: 'python_.*'
+        target_label: service
+        replacement: 'mimir'
+    metric_relabel_configs:
+      # Add service labels to all metrics
+      - target_label: service
+        replacement: 'mimir'
+      - target_label: component
+        replacement: 'mcp-server'
+
+  # Lens Search Service Metrics  
+  - job_name: 'lens-server'
+    static_configs:
+      - targets: ['lens:9464']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'lens-server'
+      - source_labels: [__name__]
+        regex: 'nodejs_.*'
+        target_label: service
+        replacement: 'lens'
+    metric_relabel_configs:
+      - target_label: service
+        replacement: 'lens'
+      - target_label: component
+        replacement: 'search-engine'
+
+  # ==========================================================================
+  # INFRASTRUCTURE SERVICES
+  # ==========================================================================
+  
+  # PostgreSQL Database Metrics
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    relabel_configs:
+      - target_label: service
+        replacement: 'postgresql'
+
+  # Redis Cache Metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    relabel_configs:
+      - target_label: service
+        replacement: 'redis'
+
+  # NATS Message Queue Metrics
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['nats:8222']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: service
+        replacement: 'nats'
+
+  # ==========================================================================
+  # MONITORING SERVICES
+  # ==========================================================================
+  
+  # Prometheus Self-Monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Grafana Metrics
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    relabel_configs:
+      - target_label: service
+        replacement: 'grafana'
+
+  # Jaeger Metrics
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:14269']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    relabel_configs:
+      - target_label: service
+        replacement: 'jaeger'
+
+  # OpenTelemetry Collector Metrics
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:8889']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: service
+        replacement: 'otel-collector'
+
+  # ==========================================================================
+  # SYSTEM & CONTAINER METRICS
+  # ==========================================================================
+  
+  # Node Exporter (System Metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'docker-host'
+
+  # cAdvisor (Container Metrics)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    metric_relabel_configs:
+      # Filter out irrelevant container metrics
+      - source_labels: [container_label_com_docker_compose_service]
+        regex: ''
+        action: drop
+      # Add service labels based on container names
+      - source_labels: [name]
+        regex: '/mimir-.*'
+        target_label: service_group
+        replacement: 'mimir'
+      - source_labels: [name]
+        regex: '/lens-.*'
+        target_label: service_group
+        replacement: 'lens'
+
+  # ==========================================================================
+  # LOAD BALANCER & REVERSE PROXY
+  # ==========================================================================
+  
+  # Nginx Metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: service
+        replacement: 'nginx'
+
+  # ==========================================================================
+  # SERVICE DISCOVERY (Optional)
+  # ==========================================================================
+  
+  # Docker Service Discovery (if enabled)
+  - job_name: 'docker-services'
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 30s
+    relabel_configs:
+      # Only scrape containers with prometheus.io/scrape=true label
+      - source_labels: [__meta_docker_container_label_prometheus_io_scrape]
+        action: keep
+        regex: true
+      # Use custom port if specified
+      - source_labels: [__meta_docker_container_label_prometheus_io_port]
+        target_label: __address__
+        regex: (.+)
+        replacement: '${1}'
+      # Use custom path if specified
+      - source_labels: [__meta_docker_container_label_prometheus_io_path]
+        target_label: __metrics_path__
+        regex: (.+)
+        replacement: '${1}'
+      # Add container labels as metric labels
+      - regex: __meta_docker_container_label_(.+)
+        action: labelmap
+        replacement: container_${1}
+
+# ==========================================================================
+# REMOTE WRITE (Optional - for long-term storage)
+# ==========================================================================
+
+# Uncomment to enable remote write to external systems
+# remote_write:
+#   - url: 'https://your-metrics-storage.com/api/v1/write'
+#     basic_auth:
+#       username: 'metrics_user'
+#       password: 'metrics_password'
+#     queue_config:
+#       max_samples_per_send: 1000
+#       capacity: 10000
+#       max_shards: 200
+#     metadata_config:
+#       send: true
+#       send_interval: 30s
+
+# ==========================================================================
+# STORAGE CONFIGURATION
+# ==========================================================================
+
+# Storage retention and cleanup
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 50GB
+    wal-compression: true
+    head-chunks-write-queue-size: 0
+
+# ==========================================================================
+# QUERY CONFIGURATION
+# ==========================================================================
+
+# Query engine configuration
+query:
+  max_concurrent_queries: 20
+  timeout: 2m
+  max_samples: 50000000
+  lookback_delta: 5m

@@ -1,0 +1,118 @@
+# Mimir Deep Research Monitoring Configuration
+# This configuration defines how Mimir's research capabilities are monitored
+# using Skald and NATS JetStream for real-time trace visualization
+
+monitoring:
+  enabled: true
+  session_tracking: true
+  deep_research_analysis: true
+
+# NATS JetStream configuration for trace emission
+nats:
+  url: "nats://localhost:4222"
+  stream_name: "MIMIR_TRACES"
+  enabled: true
+  
+  # Stream configuration
+  stream_config:
+    max_msgs: 100000          # Keep last 100k traces
+    max_age_days: 7           # Keep traces for 7 days
+    subjects:
+      - "mimir_traces.ensure_repo_index"
+      - "mimir_traces.search_repo"  
+      - "mimir_traces.ask_index"
+      - "mimir_traces.get_repo_bundle"
+      - "mimir_traces.cancel"
+
+# Skald monitoring configuration
+skald:
+  feedback_strength: "detailed"
+  capture_output: true
+  context: "mimir_deep_research"
+  
+  # Function-level monitoring
+  functions:
+    tool_execution: true
+    pipeline_stages: true
+    query_processing: true
+    search_analysis: true
+
+# Research session tracking
+research_sessions:
+  track_sessions: true
+  session_timeout_minutes: 60
+  capture_query_patterns: true
+  analyze_complexity: true
+  
+  # Complexity analysis settings
+  complexity_indicators:
+    simple: ["what", "where", "when"]
+    medium: ["how", "explain", "design"]
+    complex: ["why", "analyze", "compare", "relationship", "pattern", "architecture", "optimize"]
+
+# Trace emission settings
+traces:
+  emit_start_events: true
+  emit_completion_events: true
+  emit_error_events: true
+  include_arguments: true
+  include_results: false      # May be large, disable by default
+  include_timing: true
+  include_performance_metrics: true
+
+# Dashboard and visualization
+dashboard:
+  enabled: true
+  
+  # Key metrics to track
+  metrics:
+    - total_tool_calls
+    - research_sessions_active
+    - average_execution_time
+    - error_rate
+    - question_complexity_distribution
+    - search_result_quality
+    - deep_research_effectiveness
+  
+  # Real-time monitoring
+  realtime:
+    update_interval_seconds: 1
+    max_trace_buffer: 1000
+    
+# Agent trace patterns to watch for
+agent_patterns:
+  research_depth:
+    - "Multiple follow-up queries"
+    - "Cross-reference searches" 
+    - "Architecture analysis"
+    - "Pattern recognition"
+    
+  performance_indicators:
+    - "Sub-second search responses"
+    - "High relevance scores"
+    - "Comprehensive evidence collection"
+    - "Multi-modal search utilization"
+
+# Alerting (future feature)
+alerts:
+  enabled: false
+  thresholds:
+    high_error_rate: 0.1       # 10% error rate
+    slow_response_time: 10.0   # 10 seconds
+    session_timeout: 300       # 5 minutes
+
+# Integration settings
+integrations:
+  prometheus:
+    enabled: false
+    port: 8000
+    
+  grafana:
+    enabled: false
+    dashboard_path: "./dashboards/mimir-monitoring.json"
+    
+  # Future: Custom trace viewer
+  trace_viewer:
+    enabled: false
+    port: 8080
+    websocket_updates: true

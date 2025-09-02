@@ -49,6 +49,29 @@ except ImportError:
 from .pipeline_coordinator import PipelineCoordinator, get_pipeline_coordinator
 from .integration_helpers import run_integration_validation, validate_mimir_2_setup
 
+# Lens Integration Components
+from .lens_client import (
+    LensIntegrationClient,
+    LensHealthStatus,
+    LensResponse,
+    LensHealthCheck,
+    LensIndexRequest,
+    LensSearchRequest,
+    LensIntegrationError,
+    LensConnectionError,
+    LensServiceError,
+    LensTimeoutError,
+    get_lens_client,
+    init_lens_client,
+)
+from .lens_integration_helpers import (
+    validate_lens_connection,
+    test_lens_performance,
+    diagnose_lens_issues,
+    print_lens_status,
+    run_lens_validation_suite,
+)
+
 __all__ = [
     # Pipeline stages
     "PipelineStageInterface",
@@ -76,6 +99,25 @@ __all__ = [
     "get_pipeline_coordinator", 
     "run_integration_validation",
     "validate_mimir_2_setup",
+    
+    # Lens Integration
+    "LensIntegrationClient",
+    "LensHealthStatus",
+    "LensResponse", 
+    "LensHealthCheck",
+    "LensIndexRequest",
+    "LensSearchRequest",
+    "LensIntegrationError",
+    "LensConnectionError",
+    "LensServiceError",
+    "LensTimeoutError",
+    "get_lens_client",
+    "init_lens_client",
+    "validate_lens_connection",
+    "test_lens_performance",
+    "diagnose_lens_issues",
+    "print_lens_status",
+    "run_lens_validation_suite",
     
     # Constants
     "RAPTOR_AVAILABLE",

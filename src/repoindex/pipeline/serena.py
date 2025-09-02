@@ -32,7 +32,19 @@ class SerenaAdapter:
 
     def __init__(self, serena_path: str | None = None, validate: bool = True):
         """Initialize Serena adapter."""
-        self.serena_path = serena_path or "serena"
+        if serena_path is None:
+            # Try common installation paths
+            import shutil
+            serena_path = shutil.which("serena")
+            if not serena_path:
+                # Try user local bin
+                user_bin_path = Path.home() / ".local" / "bin" / "serena"
+                if user_bin_path.exists():
+                    serena_path = str(user_bin_path)
+                else:
+                    serena_path = "serena"
+        
+        self.serena_path = serena_path
         if validate:
             self._validate_serena()
 
@@ -66,20 +78,34 @@ class SerenaAdapter:
         if progress_callback:
             progress_callback(5)
 
-        # Filter TypeScript/JavaScript files
-        ts_files = [
-            f for f in files if any(f.endswith(ext) for ext in [".ts", ".tsx", ".js", ".jsx"])
+        # Filter for supported analysis files (TypeScript/JavaScript/Python)
+        supported_files = [
+            f for f in files if any(f.endswith(ext) for ext in [".ts", ".tsx", ".js", ".jsx", ".py", ".pyi"])
         ]
+        print(f"DEBUG: Serena found {len(files)} total files, {len(supported_files)} supported files")
+        print(f"DEBUG: Supported files: {supported_files[:5]}...")  # First 5 files
 
-        if not ts_files:
-            # Return empty graph if no TypeScript files
-            return SerenaGraph(entries=[], file_count=0, symbol_count=0)
+        if not supported_files:
+            # Return empty graph if no supported files
+            empty_graph = SerenaGraph(entries=[], file_count=0, symbol_count=0)
+            # Still save the empty graph to the expected file location
+            output_path = work_dir / "serena_graph.jsonl"
+            print(f"DEBUG: Creating empty serena_graph.jsonl at {output_path}")
+            # Create empty file directly if save_to_jsonl fails
+            try:
+                empty_graph.save_to_jsonl(output_path)
+                print(f"DEBUG: Saved empty graph, file exists: {output_path.exists()}")
+            except Exception as e:
+                print(f"DEBUG: save_to_jsonl failed: {e}, creating manually")
+                with open(output_path, 'w') as f:
+                    pass  # Create empty file
+            return empty_graph
 
         if progress_callback:
             progress_callback(10)
 
         # Set up Serena configuration
-        serena_config = await self._create_serena_config(project_root, ts_files, work_dir, config)
+        serena_config = await self._create_serena_config(project_root, supported_files, work_dir, config)
 
         if progress_callback:
             progress_callback(20)
@@ -101,7 +127,7 @@ class SerenaAdapter:
 
         # Extract vendor sources for direct imports
         if config.imports_policy.get("code_for_direct_imports", True):
-            await self._extract_vendor_sources(project_root, ts_files, work_dir)
+            await self._extract_vendor_sources(project_root, supported_files, work_dir)
 
         if progress_callback:
             progress_callback(100)
@@ -109,7 +135,7 @@ class SerenaAdapter:
         # Create SerenaGraph
         graph = SerenaGraph(
             entries=symbol_entries,
-            file_count=len(ts_files),
+            file_count=len(supported_files),
             symbol_count=len({entry.symbol for entry in symbol_entries if entry.symbol}),
         )
 
@@ -327,7 +353,7 @@ class SerenaAdapter:
         vendor_dir.mkdir(exist_ok=True)
 
         # Create file list for import analysis
-        files_list_path = work_dir / "ts_files.txt"
+        files_list_path = work_dir / "source_files.txt"
         with open(files_list_path, "w") as f:
             for file_path in files:
                 f.write(f"{file_path}\n")

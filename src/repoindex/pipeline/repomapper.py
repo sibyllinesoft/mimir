@@ -31,7 +31,20 @@ class RepoMapperAdapter:
 
     def __init__(self, repomapper_path: str | None = None, validate: bool = True):
         """Initialize RepoMapper adapter."""
-        self.repomapper_path = repomapper_path or "repomapper"
+        if repomapper_path is None:
+            # Try common installation paths
+            import shutil
+            repomapper_path = shutil.which("repomapper")
+            if not repomapper_path:
+                # Try user local bin
+                from pathlib import Path
+                user_bin_path = Path.home() / ".local" / "bin" / "repomapper"
+                if user_bin_path.exists():
+                    repomapper_path = str(user_bin_path)
+                else:
+                    repomapper_path = "repomapper"
+        
+        self.repomapper_path = repomapper_path
         if validate:
             self._validate_repomapper()
 
