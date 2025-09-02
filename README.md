@@ -23,6 +23,7 @@
 - **Zero-config MCP integration** - works out of the box with Claude Desktop
 - **5 powerful tools** for indexing, searching, and code analysis
 - **Real-time progress tracking** through MCP resources
+- **Advanced monitoring** with Skald integration and NATS JetStream traces
 
 **🚀 Production-Grade Performance**
 - **51.9% faster** than baseline implementations
@@ -49,6 +50,7 @@
 - **🛡️ Security Hardening**: Authentication, sandboxing, encryption, audit logging
 - **📈 Performance Optimized**: 51.9% improvement over baseline with intelligent caching
 - **📊 Full Observability**: Prometheus metrics, Grafana dashboards, Jaeger tracing
+- **🔍 Deep Monitoring**: Skald integration with NATS JetStream for real-time agent traces
 - **🐳 Container Ready**: Docker/Compose deployment with health checks
 - **⚡ High Performance**: Optimized for concurrent operations and large repositories
 
