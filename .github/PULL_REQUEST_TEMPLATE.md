@@ -65,12 +65,25 @@ pytest tests/integration/test_pipeline_integration.py -v
 
 - [ ] No security implications
 - [ ] Security review completed
-- [ ] Security tests pass
+- [ ] Bandit security scan passes
 - [ ] No sensitive data exposed
 - [ ] Authentication/authorization properly handled
+- [ ] Input validation implemented for external inputs
 
 **Security Notes:**
 <!-- Describe any security considerations, mitigations, or reviews performed -->
+
+## 📊 Monitoring Integration
+
+- [ ] No monitoring changes required
+- [ ] Skald monitoring integration preserved/enhanced
+- [ ] Trace emission includes appropriate context
+- [ ] Performance metrics captured for critical paths
+- [ ] Error handling preserves monitoring context
+- [ ] NATS trace streaming tested (if applicable)
+
+**Monitoring Notes:**
+<!-- Describe monitoring implications, trace context, or observability changes -->
 
 ## 📚 Documentation
 
@@ -104,9 +117,12 @@ pytest tests/integration/test_pipeline_integration.py -v
 
 ### CI/CD Pipeline
 - [ ] All CI checks pass (linting, type checking, tests)
-- [ ] Security scans pass
+- [ ] Cleanup enforcement workflow passes (format, structure, security)
+- [ ] Pre-commit hooks run successfully
+- [ ] Security scans pass (bandit, safety, pip-audit)
 - [ ] Container builds successfully
 - [ ] No new vulnerabilities introduced
+- [ ] Monitoring integration tests pass
 
 ### Review Readiness
 - [ ] PR is ready for review
@@ -151,8 +167,10 @@ uv sync --extra dev --extra test
 # 3. Run tests
 pytest tests/ -v
 
-# 4. Run the application
+# 4. Run the application (standard or monitored)
 python -m repoindex.mcp.server
+# OR with monitoring
+python -m repoindex.mcp.monitored_server
 ```
 
 ## 📝 Additional Notes
@@ -162,6 +180,17 @@ python -m repoindex.mcp.server
 ---
 
 **Thank you for contributing to Mimir Deep Code Research System! 🎉**
+
+---
+
+## 🧹 Cleanup Framework Compliance
+
+This repository follows a comprehensive cleanup framework with:
+- **Quality Gates**: Automated format, lint, security, and test enforcement
+- **Monitoring Integration**: Skald-based trace emission and NATS streaming
+- **Repository Standards**: Clean structure, complete documentation, git history preservation
+
+By submitting this PR, you confirm compliance with the established standards and quality gates.
 
 <!-- 
 Please ensure all items in the checklist are completed before requesting review.
