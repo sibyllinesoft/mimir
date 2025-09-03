@@ -127,8 +127,8 @@ docs = [
 ]
 
 [project.scripts]
-mimir-server = "repoindex.mcp.server:main"
-mimir-monitored-server = "repoindex.mcp.monitored_server:main"
+mimir-server = "repoindex.mcp.monitored_server:main"
+mimir-server-basic = "repoindex.mcp.server:main"
 mimir-ui = "repoindex.ui.app:main"
 
 [build-system]

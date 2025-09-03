@@ -86,7 +86,7 @@ python setup.py
 git clone https://github.com/your-org/mimir.git && cd mimir
 python setup.py && source .venv/bin/activate
 
-# Start the MCP server
+# Start the MCP server (with Skald monitoring enabled by default)
 uv run python -m repoindex.mcp.server
 
 # Or start the web UI
@@ -254,10 +254,13 @@ Claude: Using multi-hop reasoning to analyze the password reset flow...
 
 #### MCP Server (Primary Interface)
 
-Start the MCP stdio server:
+Start the MCP stdio server (with comprehensive monitoring):
 ```bash
-# Standard server
+# Default server (with Skald monitoring)
 uv run python -m repoindex.mcp.server
+
+# Basic server (minimal, no monitoring)
+uv run python -m repoindex.mcp.server-basic
 
 # With security hardening (production)
 uv run python -m repoindex.main_secure mcp

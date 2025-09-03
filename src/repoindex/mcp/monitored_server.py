@@ -134,21 +134,42 @@ class MonitoredMCPServer(MCPServer):
                  storage_dir: Path | None = None, 
                  query_engine=None,
                  nats_url: str = "nats://localhost:4222",
-                 enable_nats_traces: bool = True):
+                 enable_nats_traces: bool = True,
+                 feedback_strength: str = "FREQUENT"):
         """Initialize monitored MCP server."""
         # Initialize base server
         super().__init__(storage_dir, query_engine)
         
-        # Set up monitoring
+        # Set up monitoring with high reporting
         self.trace_emitter = NATSTraceEmitter(nats_url) if enable_nats_traces else None
         self.session_id = str(uuid.uuid4())
+        self.feedback_strength = getattr(FeedbackStrength, feedback_strength, FeedbackStrength.FREQUENT)
         
         # Enhanced monitoring state
         self.tool_call_count = 0
         self.research_sessions = {}  # Track deep research sessions
         self.active_traces = {}  # Track ongoing operations
         
+        # Enable detailed Skald monitoring
+        self.monitoring_enabled = True
+        
         logger.info(f"Monitored MCP server initialized with session_id: {self.session_id}")
+        logger.info(f"Skald monitoring enabled with {feedback_strength} reporting level")
+    
+    def _create_feedback_report(self, tool_name: str, execution_time: float, trace_data: dict) -> FeedbackReport:
+        """Create detailed feedback report for Skald monitoring."""
+        return FeedbackReport(
+            strength=self.feedback_strength,
+            metadata={
+                "tool_name": tool_name,
+                "execution_time": execution_time,
+                "session_id": self.session_id,
+                "call_sequence": self.tool_call_count,
+                "trace_data": trace_data,
+                "timestamp": time.time(),
+                "monitoring_level": "HIGH"
+            }
+        )
     
     async def start_monitoring(self):
         """Initialize monitoring connections."""
@@ -216,7 +237,11 @@ class MonitoredMCPServer(MCPServer):
             if self.trace_emitter:
                 await self.trace_emitter.emit_trace(trace_data)
             
+            # Create and log high-detail feedback report
+            feedback_report = self._create_feedback_report(name, execution_time, trace_data)
             logger.info(f"Tool {name} executed successfully in {execution_time:.2f}s")
+            logger.debug(f"High-detail trace: {trace_data}")
+            
             return result
             
         except Exception as e:
@@ -237,7 +262,10 @@ class MonitoredMCPServer(MCPServer):
             if self.trace_emitter:
                 await self.trace_emitter.emit_trace(trace_data)
             
+            # Create and log error feedback report
+            feedback_report = self._create_feedback_report(name, execution_time, trace_data)
             logger.error(f"Tool {name} failed after {execution_time:.2f}s: {e}")
+            logger.debug(f"High-detail error trace: {trace_data}")
             
             # Return error as TextContent
             return [TextContent(type="text", text=f"Error: {str(e)}")]
@@ -465,18 +493,26 @@ class MonitoredMCPServer(MCPServer):
         }
 
 
-async def async_main() -> None:
+async def async_main(feedback_level: str = "FREQUENT", disable_nats: bool = False) -> None:
     """Async main entry point for monitored MCP server."""
     setup_logging()
     
-    # Create monitored server instance
-    mcp_server = MonitoredMCPServer()
+    # Create monitored server instance with specified feedback level
+    mcp_server = MonitoredMCPServer(
+        enable_nats_traces=not disable_nats,
+        feedback_strength=feedback_level
+    )
     
     # Start monitoring systems
     await mcp_server.start_monitoring()
     
     try:
         # Run stdio server
+        # Log monitoring status
+        logger.info(f"🔍 Skald monitoring: ENABLED with {feedback_level} feedback level")
+        logger.info(f"📊 NATS trace streaming: {'ENABLED' if not disable_nats else 'DISABLED'}")
+        logger.info(f"🎯 Session ID: {mcp_server.session_id}")
+        
         async with stdio_server() as (read_stream, write_stream):
             await mcp_server.server.run(
                 read_stream,
@@ -501,13 +537,13 @@ def main() -> None:
     import sys
     
     parser = argparse.ArgumentParser(
-        prog="mimir-monitored-server",
-        description="Mimir Monitored MCP Server - Deep Research with Skald Monitoring"
+        prog="mimir-server",
+        description="Mimir MCP Server - Deep Research with Comprehensive Skald Monitoring (Default)"
     )
     parser.add_argument(
         "--version",
         action="version", 
-        version="mimir-monitored-server 1.0.0"
+        version="mimir-server 1.0.0 (with Skald monitoring)"
     )
     parser.add_argument(
         "--storage-dir",
@@ -525,6 +561,12 @@ def main() -> None:
         action="store_true",
         help="Disable NATS trace emission"
     )
+    parser.add_argument(
+        "--feedback-level",
+        choices=["RARE", "OCCASIONAL", "FREQUENT"],
+        default="FREQUENT",
+        help="Skald feedback reporting level (default: FREQUENT for high detail)"
+    )
     
     args = parser.parse_args()
     
@@ -534,12 +576,15 @@ def main() -> None:
         os.environ['MIMIR_DATA_DIR'] = args.storage_dir
     
     try:
-        asyncio.run(async_main())
+        asyncio.run(async_main(
+            feedback_level=args.feedback_level,
+            disable_nats=args.disable_nats
+        ))
     except KeyboardInterrupt:
-        print("Mimir monitored server stopped by user", file=sys.stderr)
+        print("Mimir server stopped by user", file=sys.stderr)
         sys.exit(0)
     except Exception as e:
-        print(f"Error starting Mimir monitored server: {e}", file=sys.stderr)
+        print(f"Error starting Mimir server: {e}", file=sys.stderr)
         sys.exit(1)
 
 
