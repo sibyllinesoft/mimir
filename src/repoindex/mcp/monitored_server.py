@@ -26,7 +26,7 @@ import uuid
 
 # Skald imports for monitoring
 from skald import SurveyingProxy, FeedbackReport, ToolRunMetadata
-from skald.schema import ExecutionContext, FeedbackStrength
+from skald.schema import FeedbackStrength
 from skald.monitor import monitor, trace_function
 
 # NATS for trace streaming
