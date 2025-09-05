@@ -1,0 +1,94 @@
+{
+  "name": "mimir",
+  "version": "2.0.0",
+  "description": "Mimir - AI-Powered Code Research System for Claude Desktop (Bun Native)",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "mimir": "src/cli.ts",
+    "mimir-server": "src/server.ts"
+  },
+  "scripts": {
+    "dev": "bun --hot src/server.ts",
+    "start": "bun src/server.ts",
+    "build": "bun build --compile --minify --sourcemap --outfile=dist/mimir src/cli.ts",
+    "build:server": "bun build --compile --minify --sourcemap --outfile=dist/mimir-server src/server.ts",
+    "build:all": "bun run build && bun run build:server",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "clean": "rm -rf dist node_modules/.cache",
+    "postinstall": "bun install --frozen-lockfile"
+  },
+  "keywords": [
+    "repository",
+    "indexing", 
+    "mcp",
+    "ai",
+    "code-analysis",
+    "claude-code",
+    "lens",
+    "typescript",
+    "bun"
+  ],
+  "author": "Mimir Development Team <dev@mimir.ai>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mimir-ai/mimir.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mimir-ai/mimir/issues"
+  },
+  "homepage": "https://mimir.ai",
+  "engines": {
+    "bun": ">=1.0.0",
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.29.0",
+    "@google/generative-ai": "^0.21.0",
+    "commander": "^12.1.0",
+    "fast-xml-parser": "^4.5.0",
+    "hono": "^4.6.11",
+    "msgpackr": "^1.11.2",
+    "ulid": "^2.3.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.13",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0", 
+    "eslint": "^9.18.0",
+    "typescript": "^5.7.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "src/**/*",
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/types.ts"
+    },
+    "./server": {
+      "import": "./src/server.ts",
+      "types": "./src/types.ts"
+    },
+    "./client": {
+      "import": "./src/client.ts", 
+      "types": "./src/types.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

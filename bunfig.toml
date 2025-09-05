@@ -1,0 +1,44 @@
+# Bun configuration for Mimir project
+[install]
+# Configure package manager behavior
+cache = "node_modules/.cache"
+exact = false
+optional = true
+dev = true
+peer = false
+
+[install.lockfile]
+# Save exact versions for better reproducibility
+save = "exact"
+
+[test]
+# Test configuration
+preload = ["./tests/setup.ts"]
+coverage = true
+timeout = 30000
+
+# Test patterns
+include = [
+  "tests/**/*.test.ts",
+  "tests/**/*.test.js",
+  "src/**/*.test.ts",
+  "src/**/*.test.js"
+]
+
+exclude = [
+  "node_modules/**/*",
+  "dist/**/*",
+  "coverage/**/*"
+]
+
+[build]
+# Build configuration
+minify = true
+target = "node"
+sourcemap = "external"
+format = "esm"
+
+# Path mapping for cleaner imports
+[module]
+"@/*" = "./src/*"
+"@/tests/*" = "./tests/*"
