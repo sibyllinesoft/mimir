@@ -1,0 +1,136 @@
+name: "Quick Overview"
+description: "Fast, broad analysis for initial code understanding and rapid intelligence gathering"
+version: "1.0.0"
+
+pipeline:
+  maxIterations: 2
+  convergenceThreshold: 0.7
+  parallelismLevel: 5
+  timeoutMs: 60000
+  focus: "intelligence_gathering"
+  outputOptimization: "swarm_handoff"
+
+agents:
+  - type: intelligence_analyst
+    name: "rapid-analyst"
+    enabled: true
+    weight: 0.4
+    config:
+      systemPrompt: |
+        You are a rapid intelligence analyst. Provide quick but comprehensive
+        overview intelligence for fast decision-making.
+        
+        Focus on:
+        - Key architectural patterns and entry points
+        - Main challenges and obvious constraints
+        - High-level approach options
+        - Most critical risks to be aware of
+        
+        Be concise but thorough - hit the highlights that matter most.
+      specialization: ["rapid_analysis", "pattern_recognition", "overview_generation"]
+      temperature: 0.6
+      maxTokens: 1500
+    dependencies: []
+
+  - type: strategy_mapper
+    name: "quick-strategist"
+    enabled: true
+    weight: 0.4
+    config:
+      systemPrompt: |
+        You are a quick strategic mapper. Identify the main strategic options
+        and basic trade-offs for rapid strategic planning.
+        
+        Focus on:
+        - 2-3 primary approach options
+        - Obvious pros/cons of each approach
+        - Major decision points for debate
+        - Resource and complexity implications
+        
+        Keep it high-level but actionable.
+      specialization: ["rapid_strategy", "high_level_trade_offs"]
+      temperature: 0.7
+      maxTokens: 1200
+    dependencies: ["rapid-analyst"]
+
+  - type: intelligence_synthesizer
+    name: "quick-synthesizer"
+    enabled: true
+    weight: 0.2
+    config:
+      systemPrompt: |
+        Synthesize rapid intelligence into a concise brief for quick decision-making
+        or feeding into deeper analysis later.
+        
+        Focus on clarity and actionable next steps.
+      temperature: 0.5
+      maxTokens: 1500
+    dependencies: ["rapid-analyst", "quick-strategist"]
+
+stages:
+  - name: "rapid-discovery"
+    type: "domain_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.4
+    config:
+      analyzeConstraints: true
+      findPrecedents: false
+      mapStakeholders: false
+      identifySuccessMetrics: true
+
+  - name: "basic-technical-scan"
+    type: "technical_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.3
+    config:
+      analyzeCodebase: true
+      assessComplexity: false
+      identifyBottlenecks: false
+      mapDependencies: true
+
+  - name: "approach-identification"
+    type: "strategy_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.3
+    config:
+      mapSolutionSpace: false
+      identifyApproaches: true
+      analyzeTradeoffs: false
+      findHybrids: false
+
+verification:
+  - type: "syntactic"
+    enabled: true
+    weight: 0.6
+    config:
+      checkCompilation: false
+      validateImports: true
+
+  - type: "logical_consistency"
+    enabled: true
+    weight: 0.4
+    config:
+      checkContradictions: true
+      validateInferences: false
+
+output:
+  format: "intelligence_brief"
+  sections:
+    - "executive_intelligence_summary"
+    - "key_strategic_approaches"
+    - "primary_constraints_and_risks"
+    - "recommended_next_steps"
+  densityTarget: 2000
+  optimizeFor: "swarm_consumption"
+  includeDebateTopics: true
+  includeMetrics: false
+  includeCitations: true
+
+performance:
+  cacheResults: true
+  cacheTtlMinutes: 30
+  maxMemoryMb: 512
+  cpuIntensive: false

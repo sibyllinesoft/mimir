@@ -1,0 +1,202 @@
+name: "Security-Focused Analysis"
+description: "Security-first intelligence gathering for identifying vulnerabilities and security considerations"
+version: "1.0.0"
+
+pipeline:
+  maxIterations: 3
+  convergenceThreshold: 0.85
+  parallelismLevel: 2
+  timeoutMs: 180000
+  focus: "intelligence_gathering"
+  outputOptimization: "swarm_handoff"
+
+agents:
+  - type: intelligence_analyst
+    name: "security-analyst"
+    enabled: true
+    weight: 0.4
+    config:
+      systemPrompt: |
+        You are a security intelligence analyst. Your role is to identify
+        security concerns, vulnerabilities, and security architecture considerations.
+        
+        Focus on:
+        - Authentication and authorization patterns
+        - Data protection and privacy concerns
+        - Input validation and sanitization needs
+        - Dependency security and supply chain risks
+        - Infrastructure and deployment security
+        - Compliance requirements (GDPR, HIPAA, SOX, etc.)
+        
+        Provide security intelligence that helps debate teams understand
+        the security landscape and make security-informed decisions.
+      specialization: ["security_analysis", "vulnerability_assessment", "compliance", "threat_modeling"]
+      temperature: 0.2
+      maxTokens: 3000
+    dependencies: []
+
+  - type: risk_analyst
+    name: "security-risk-assessor"
+    enabled: true
+    weight: 0.4
+    config:
+      systemPrompt: |
+        You are a security risk analyst. Assess security risks across
+        technical, operational, and compliance dimensions.
+        
+        Focus on:
+        - Threat modeling and attack vectors
+        - Risk prioritization based on impact and likelihood
+        - Security control effectiveness
+        - Incident response considerations
+        - Business continuity and disaster recovery
+        - Third-party and supply chain risks
+        
+        Provide risk assessments that enable informed security debates.
+      specialization: ["threat_modeling", "risk_assessment", "security_controls", "incident_response"]
+      temperature: 0.2
+      maxTokens: 2500
+    dependencies: ["security-analyst"]
+
+  - type: strategy_mapper
+    name: "security-strategy-mapper"
+    enabled: true
+    weight: 0.1
+    config:
+      systemPrompt: |
+        You are a security strategy mapper. Map out security approaches
+        and defensive strategies for different threat models.
+        
+        Focus on:
+        - Defense-in-depth strategies
+        - Zero-trust architecture approaches
+        - Security-by-design principles
+        - Compliance framework options
+        - Security tooling and automation strategies
+        
+        Structure these as strategic security options for debate.
+      specialization: ["security_strategy", "defense_in_depth", "zero_trust", "compliance_frameworks"]
+      temperature: 0.3
+      maxTokens: 2000
+    dependencies: ["security-analyst", "security-risk-assessor"]
+
+  - type: intelligence_synthesizer
+    name: "security-synthesizer"
+    enabled: true
+    weight: 0.1
+    config:
+      systemPrompt: |
+        Synthesize security intelligence into a comprehensive brief
+        for security-focused debate swarms.
+        
+        Structure security debates around threat models, risk tolerance,
+        and security architecture decisions.
+      temperature: 0.3
+      maxTokens: 3000
+    dependencies: ["security-analyst", "security-risk-assessor", "security-strategy-mapper"]
+
+stages:
+  - name: "security-surface-analysis"
+    type: "domain_analysis"
+    enabled: true
+    parallel: false
+    weight: 0.3
+    config:
+      analyzeConstraints: true
+      findPrecedents: true
+      mapStakeholders: true
+      identifySuccessMetrics: true
+      focusAreas: ["security", "compliance", "privacy"]
+
+  - name: "vulnerability-assessment"
+    type: "technical_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.3
+    config:
+      analyzeCodebase: true
+      assessComplexity: false
+      identifyBottlenecks: false
+      mapDependencies: true
+      focusAreas: ["vulnerabilities", "dependencies", "configurations"]
+
+  - name: "threat-modeling"
+    type: "risk_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.25
+    config:
+      technicalRisks: true
+      implementationRisks: false
+      maintenanceRisks: false
+      performanceRisks: false
+      securityRisks: true
+      complianceRisks: true
+
+  - name: "security-architecture-analysis"
+    type: "strategy_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.15
+    config:
+      mapSolutionSpace: true
+      identifyApproaches: true
+      analyzeTradeoffs: true
+      findHybrids: false
+      focusAreas: ["security_patterns", "defense_strategies"]
+
+verification:
+  - type: "syntactic"
+    enabled: true
+    weight: 0.2
+    config:
+      checkCompilation: false
+      validateImports: true
+
+  - type: "semantic"
+    enabled: true
+    weight: 0.3
+    config:
+      validateRelationships: true
+      checkLogicalConsistency: true
+      assessSecurityPatterns: true
+
+  - type: "cross_reference"
+    enabled: true
+    weight: 0.3
+    config:
+      validateCitations: true
+      checkFactualConsistency: true
+      verifySecurityClaims: true
+
+  - type: "logical_consistency"
+    enabled: true
+    weight: 0.2
+    config:
+      checkContradictions: true
+      validateInferences: true
+      assessThreatLogic: true
+
+output:
+  format: "intelligence_brief"
+  sections:
+    - "executive_security_summary"
+    - "threat_landscape_analysis"
+    - "vulnerability_assessment_findings"
+    - "security_architecture_recommendations"
+    - "compliance_and_regulatory_considerations"
+    - "risk_prioritization_matrix"
+    - "security_control_strategies"
+    - "incident_response_and_recovery_planning"
+    - "security_debate_framework"
+  densityTarget: 4000
+  optimizeFor: "swarm_consumption"
+  includeDebateTopics: true
+  includeMetrics: true
+  includeCitations: true
+
+performance:
+  cacheResults: true
+  cacheTtlMinutes: 90
+  maxMemoryMb: 1024
+  cpuIntensive: false

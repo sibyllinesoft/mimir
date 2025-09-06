@@ -1,0 +1,198 @@
+name: "TypeScript Deep Analysis"
+description: "Comprehensive TypeScript codebase research with type system and ecosystem focus"
+version: "1.0.0"
+
+pipeline:
+  maxIterations: 3
+  convergenceThreshold: 0.8
+  parallelismLevel: 4
+  timeoutMs: 240000
+  focus: "intelligence_gathering"
+  outputOptimization: "swarm_handoff"
+
+agents:
+  - type: intelligence_analyst
+    name: "typescript-domain-expert"
+    enabled: true
+    weight: 0.3
+    config:
+      systemPrompt: |
+        You are a TypeScript domain expert analyst. Analyze TypeScript codebases
+        with deep understanding of the language, ecosystem, and modern patterns.
+        
+        Focus on:
+        - Type system utilization and opportunities
+        - Modern TypeScript patterns (2024-2025)
+        - Framework integration patterns (React, Node, etc.)
+        - Build tooling and configuration analysis
+        - Performance implications of TypeScript choices
+        
+        Provide intelligence that helps debate teams understand the TypeScript
+        landscape and make informed architectural decisions.
+      specialization: ["typescript", "type_systems", "modern_patterns", "ecosystem_analysis"]
+      temperature: 0.3
+      maxTokens: 3000
+    dependencies: []
+
+  - type: strategy_mapper
+    name: "typescript-architecture-strategist"
+    enabled: true
+    weight: 0.3
+    config:
+      systemPrompt: |
+        You are a TypeScript architecture strategist. Map out architectural
+        approaches specifically suited for TypeScript projects.
+        
+        Focus on:
+        - Monorepo vs multi-repo strategies
+        - Type-first vs code-first development approaches
+        - Modular architecture patterns
+        - Build and deployment strategies
+        - Migration strategies for legacy code
+        - Performance optimization approaches
+        
+        Structure these as debatable strategic options with clear trade-offs.
+      specialization: ["typescript_architecture", "build_strategies", "migration_patterns"]
+      temperature: 0.4
+      maxTokens: 2500
+    dependencies: ["typescript-domain-expert"]
+
+  - type: risk_analyst
+    name: "typescript-risk-specialist"
+    enabled: true
+    weight: 0.2
+    config:
+      systemPrompt: |
+        You are a TypeScript-specific risk analyst. Identify risks and gotchas
+        specific to TypeScript development.
+        
+        Focus on:
+        - Type safety vs development velocity trade-offs
+        - Build complexity and toolchain risks
+        - Dependency management challenges
+        - Team skill level and learning curve considerations
+        - Runtime performance implications
+        - Migration and upgrade risks
+        
+        Provide TypeScript-specific mitigation strategies.
+      specialization: ["typescript_risks", "toolchain_complexity", "performance_risks"]
+      temperature: 0.2
+      maxTokens: 2000
+    dependencies: ["typescript-domain-expert"]
+
+  - type: intelligence_synthesizer
+    name: "typescript-synthesizer"
+    enabled: true
+    weight: 0.2
+    config:
+      systemPrompt: |
+        Synthesize TypeScript-specific intelligence into a comprehensive brief
+        optimized for debate swarms working on TypeScript projects.
+        
+        Structure debates around TypeScript-specific decision points and
+        provide the technical context needed for informed architectural decisions.
+      temperature: 0.4
+      maxTokens: 3500
+    dependencies: ["typescript-domain-expert", "typescript-architecture-strategist", "typescript-risk-specialist"]
+
+stages:
+  - name: "typescript-ecosystem-analysis"
+    type: "domain_analysis"
+    enabled: true
+    parallel: false
+    weight: 0.25
+    config:
+      analyzeConstraints: true
+      findPrecedents: true
+      mapStakeholders: false
+      identifySuccessMetrics: true
+      focusAreas: ["typescript", "ecosystem", "tooling"]
+
+  - name: "type-system-analysis"
+    type: "type_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.3
+    config:
+      analyzeGenerics: true
+      trackInference: true
+      mapInheritance: true
+      assessComplexity: true
+
+  - name: "symbol-and-dependency-mapping"
+    type: "symbol_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.25
+    config:
+      includePrivate: false
+      analyzeExports: true
+      trackReferences: true
+      focusTypeScript: true
+
+  - name: "build-and-tooling-analysis"
+    type: "technical_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.2
+    config:
+      analyzeBuildConfig: true
+      assessToolchain: true
+      evaluatePerformance: true
+      identifyOptimizations: true
+
+verification:
+  - type: "syntactic"
+    enabled: true
+    weight: 0.25
+    config:
+      checkCompilation: true
+      validateImports: true
+      checkTypeScript: true
+
+  - type: "semantic"
+    enabled: true
+    weight: 0.35
+    config:
+      validateTypeRelationships: true
+      checkCallGraphValidity: true
+      assessTypeInference: true
+
+  - type: "cross_reference"
+    enabled: true
+    weight: 0.25
+    config:
+      validateSymbolReferences: true
+      checkDependencyConsistency: true
+      verifyExports: true
+
+  - type: "logical_consistency"
+    enabled: true
+    weight: 0.15
+    config:
+      checkContradictions: true
+      validateInferences: true
+
+output:
+  format: "intelligence_brief"
+  sections:
+    - "executive_intelligence_summary"
+    - "typescript_ecosystem_landscape"
+    - "type_system_analysis_and_opportunities"
+    - "architectural_pattern_recommendations"
+    - "build_and_tooling_strategy"
+    - "migration_and_evolution_roadmap"
+    - "performance_and_optimization_guidance"
+    - "risk_profile_and_mitigation_strategies"
+    - "debate_framework_for_typescript_decisions"
+  densityTarget: 4500
+  optimizeFor: "swarm_consumption"
+  includeDebateTopics: true
+  includeMetrics: true
+  includeCitations: true
+
+performance:
+  cacheResults: true
+  cacheTtlMinutes: 45
+  maxMemoryMb: 1536
+  cpuIntensive: true

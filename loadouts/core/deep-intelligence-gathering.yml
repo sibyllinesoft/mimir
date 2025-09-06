@@ -1,0 +1,192 @@
+name: "Deep Intelligence Gathering"
+description: "Comprehensive intelligence for complex problems - feeds refinement swarm with dense, actionable intelligence"
+version: "1.0.0"
+
+pipeline:
+  maxIterations: 4
+  convergenceThreshold: 0.85
+  parallelismLevel: 3
+  timeoutMs: 300000
+  focus: "intelligence_gathering"
+  outputOptimization: "swarm_handoff"
+
+agents:
+  - type: intelligence_analyst
+    name: "domain-specialist"
+    enabled: true
+    weight: 0.4
+    config:
+      systemPrompt: |
+        You are a domain intelligence analyst. Your job is NOT to solve the problem,
+        but to deeply understand it and provide strategic intelligence for a debate
+        swarm that will generate solutions.
+        
+        Focus on:
+        - What are the core challenges and constraints?
+        - What domain knowledge is essential?
+        - What are the failure modes and edge cases?
+        - What approaches have worked/failed in similar situations?
+        - What tools and techniques are most relevant?
+        
+        Output dense, actionable intelligence that enables informed debate.
+      specialization: ["domain_analysis", "constraint_identification", "precedent_research"]
+      temperature: 0.3
+      maxTokens: 3000
+    dependencies: []
+
+  - type: strategy_mapper
+    name: "approach-strategist"
+    enabled: true
+    weight: 0.3
+    config:
+      systemPrompt: |
+        You are a strategic approach mapper. Analyze the solution space and map
+        out high-level strategic approaches for the debate swarm to explore.
+        
+        Focus on:
+        - What are the major strategic approaches available?
+        - What are the trade-offs between approaches?
+        - Which approaches should be debated against each other?
+        - What hybrid strategies might be viable?
+        - What assumptions should the swarm question?
+        
+        Structure approaches for comparative debate analysis.
+      specialization: ["strategy_mapping", "trade_off_analysis", "approach_taxonomy"]
+      temperature: 0.5
+      maxTokens: 2500
+    dependencies: ["domain-specialist"]
+
+  - type: risk_analyst
+    name: "risk-assessor"
+    enabled: true
+    weight: 0.2
+    config:
+      systemPrompt: |
+        You are a risk and complexity analyst. Identify what could go wrong
+        and what the debate swarm needs to be careful about.
+        
+        Focus on:
+        - Technical risks and gotchas
+        - Implementation complexity factors
+        - Performance and scalability concerns
+        - Maintenance and evolution challenges
+        - Integration and compatibility issues
+        
+        Provide mitigation strategies and contingency plans.
+      specialization: ["risk_assessment", "complexity_analysis", "failure_modes"]
+      temperature: 0.2
+      maxTokens: 2000
+    dependencies: ["domain-specialist"]
+
+  - type: intelligence_synthesizer
+    name: "strategic-synthesizer"
+    enabled: true
+    weight: 0.1
+    config:
+      systemPrompt: |
+        Synthesize intelligence into a comprehensive brief for a debate swarm.
+        Organize findings for maximum utility in solution generation debates.
+        
+        Your output should be dense, actionable intelligence that enables
+        informed debate and solution generation. Structure debate topics,
+        provide evidence bases, and frame trade-off discussions.
+      temperature: 0.4
+      maxTokens: 4000
+    dependencies: ["domain-specialist", "approach-strategist", "risk-assessor"]
+
+stages:
+  - name: "domain-intelligence"
+    type: "domain_analysis"
+    enabled: true
+    parallel: false
+    weight: 0.3
+    config:
+      analyzeConstraints: true
+      findPrecedents: true
+      mapStakeholders: true
+      identifySuccessMetrics: true
+
+  - name: "technical-intelligence"
+    type: "technical_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.25
+    config:
+      analyzeCodebase: true
+      assessComplexity: true
+      identifyBottlenecks: true
+      mapDependencies: true
+
+  - name: "strategy-mapping"
+    type: "strategy_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.25
+    config:
+      mapSolutionSpace: true
+      identifyApproaches: true
+      analyzeTradeoffs: true
+      findHybrids: true
+
+  - name: "risk-assessment"
+    type: "risk_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.2
+    config:
+      technicalRisks: true
+      implementationRisks: true
+      maintenanceRisks: true
+      performanceRisks: true
+
+verification:
+  - type: "syntactic"
+    enabled: true
+    weight: 0.2
+    config:
+      checkCompilation: false
+      validateImports: true
+      
+  - type: "semantic"
+    enabled: true
+    weight: 0.4
+    config:
+      validateRelationships: true
+      checkLogicalConsistency: true
+      
+  - type: "cross_reference"
+    enabled: true
+    weight: 0.3
+    config:
+      validateCitations: true
+      checkFactualConsistency: true
+
+  - type: "logical_consistency"
+    enabled: true
+    weight: 0.1
+    config:
+      checkContradictions: true
+      validateInferences: true
+
+output:
+  format: "intelligence_brief"
+  sections:
+    - "executive_intelligence_summary"
+    - "debate_framework_for_refinement_swarm"
+    - "strategic_approach_landscape"
+    - "technical_constraint_analysis"
+    - "risk_and_complexity_profile"
+    - "implementation_intelligence_map"
+    - "tooling_and_resource_guidance"
+    - "success_criteria_definition"
+  densityTarget: 5000
+  optimizeFor: "swarm_consumption"
+  includeDebateTopics: true
+  includeMetrics: true
+  includeCitations: true
+
+performance:
+  cacheResults: true
+  cacheTtlMinutes: 60
+  maxMemoryMb: 2048
+  cpuIntensive: true

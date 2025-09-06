@@ -463,6 +463,17 @@ export const joinPaths = (...paths: string[]): string => {
 };
 
 export const normalizePath = (path: string): string => {
+  // For relative paths, normalize without making absolute
+  if (!path.startsWith('/')) {
+    return path.split('/').reduce((acc: string[], part) => {
+      if (part === '..') {
+        acc.pop();
+      } else if (part && part !== '.') {
+        acc.push(part);
+      }
+      return acc;
+    }, []).join('/');
+  }
   return resolve(path);
 };
 
@@ -486,11 +497,17 @@ export const isWithinPath = (filePath: string, basePath: string): boolean => {
 
 export const sanitizePath = (path: string): string => {
   // Remove leading slashes and resolve relative path components
-  const normalized = resolve(path.replace(/^\/+/, ''));
-  // Remove the current working directory prefix to get relative path
-  const cwd = process.cwd();
-  if (normalized.startsWith(cwd)) {
-    return normalized.slice(cwd.length + 1);
-  }
-  return normalized;
+  const cleanPath = path.replace(/^\/+/, '');
+  
+  // Split into parts and remove dangerous components
+  const parts = cleanPath.split('/').reduce((acc: string[], part) => {
+    if (part === '..') {
+      acc.pop();
+    } else if (part && part !== '.') {
+      acc.push(part);
+    }
+    return acc;
+  }, []);
+  
+  return parts.join('/');
 };

@@ -1,0 +1,200 @@
+name: "AI-Assisted Refactoring Analysis"
+description: "Intelligence gathering for systematic code refactoring with AI assistance"
+version: "0.9.0"
+
+pipeline:
+  maxIterations: 4
+  convergenceThreshold: 0.8
+  parallelismLevel: 3
+  timeoutMs: 200000
+  focus: "intelligence_gathering"
+  outputOptimization: "swarm_handoff"
+
+agents:
+  - type: intelligence_analyst
+    name: "refactoring-analyst"
+    enabled: true
+    weight: 0.35
+    config:
+      systemPrompt: |
+        You are a refactoring intelligence analyst with expertise in code quality
+        assessment and systematic refactoring approaches.
+        
+        Focus on:
+        - Code smell identification and classification
+        - Technical debt assessment and prioritization
+        - Refactoring opportunity analysis
+        - Code quality metrics and trends
+        - Legacy system modernization patterns
+        - Automated refactoring tool recommendations
+        
+        Use the iSMELL framework and modern refactoring research to provide
+        actionable intelligence for refactoring debates.
+      specialization: ["code_smells", "technical_debt", "refactoring_patterns", "code_quality"]
+      temperature: 0.3
+      maxTokens: 3000
+    dependencies: []
+
+  - type: strategy_mapper
+    name: "refactoring-strategist"
+    enabled: true
+    weight: 0.3
+    config:
+      systemPrompt: |
+        You are a refactoring strategy mapper. Map out systematic approaches
+        to code refactoring and modernization.
+        
+        Focus on:
+        - Incremental vs big-bang refactoring strategies
+        - Strangler fig pattern applications
+        - Branch-by-abstraction techniques
+        - Parallel run strategies
+        - Risk mitigation through testing
+        - Team coordination and handoff strategies
+        
+        Structure refactoring approaches as debatable strategic options.
+      specialization: ["refactoring_strategies", "migration_patterns", "risk_mitigation"]
+      temperature: 0.4
+      maxTokens: 2500
+    dependencies: ["refactoring-analyst"]
+
+  - type: risk_analyst
+    name: "refactoring-risk-analyst"
+    enabled: true
+    weight: 0.2
+    config:
+      systemPrompt: |
+        You are a refactoring risk analyst. Assess risks specific to
+        code refactoring and modernization efforts.
+        
+        Focus on:
+        - Regression risk assessment
+        - Breaking change impact analysis
+        - Team velocity and delivery risks
+        - Testing coverage and quality risks
+        - Dependency and integration risks
+        - Business continuity considerations
+        
+        Provide refactoring-specific risk mitigation strategies.
+      specialization: ["regression_risks", "breaking_changes", "testing_risks"]
+      temperature: 0.2
+      maxTokens: 2000
+    dependencies: ["refactoring-analyst"]
+
+  - type: intelligence_synthesizer
+    name: "refactoring-synthesizer"
+    enabled: true
+    weight: 0.15
+    config:
+      systemPrompt: |
+        Synthesize refactoring intelligence into a comprehensive brief
+        for teams planning systematic code improvements.
+        
+        Structure debates around refactoring priorities, strategies,
+        and risk management approaches.
+      temperature: 0.35
+      maxTokens: 3000
+    dependencies: ["refactoring-analyst", "refactoring-strategist", "refactoring-risk-analyst"]
+
+stages:
+  - name: "code-quality-assessment"
+    type: "technical_analysis"
+    enabled: true
+    parallel: false
+    weight: 0.35
+    config:
+      analyzeCodebase: true
+      assessComplexity: true
+      identifyBottlenecks: false
+      mapDependencies: true
+      focusAreas: ["code_smells", "technical_debt", "complexity_metrics"]
+
+  - name: "refactoring-opportunity-mapping"
+    type: "strategy_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.25
+    config:
+      mapSolutionSpace: true
+      identifyApproaches: true
+      analyzeTradeoffs: true
+      findHybrids: true
+      focusAreas: ["refactoring_patterns", "modernization_strategies"]
+
+  - name: "dependency-impact-analysis"
+    type: "dependency_mapping"
+    enabled: true
+    parallel: true
+    weight: 0.2
+    config:
+      includeDevDependencies: false
+      analyzeCircularDeps: true
+      trackImportPatterns: true
+      assessRefactoringImpact: true
+
+  - name: "testing-coverage-analysis"
+    type: "risk_analysis"
+    enabled: true
+    parallel: true
+    weight: 0.2
+    config:
+      technicalRisks: true
+      implementationRisks: true
+      maintenanceRisks: false
+      performanceRisks: false
+      focusAreas: ["test_coverage", "regression_risks"]
+
+verification:
+  - type: "syntactic"
+    enabled: true
+    weight: 0.2
+    config:
+      checkCompilation: true
+      validateImports: true
+
+  - type: "semantic"
+    enabled: true
+    weight: 0.4
+    config:
+      validateRelationships: true
+      checkLogicalConsistency: true
+      assessRefactoringImpact: true
+
+  - type: "cross_reference"
+    enabled: true
+    weight: 0.25
+    config:
+      validateCitations: true
+      checkFactualConsistency: true
+      verifyImpactAssessments: true
+
+  - type: "logical_consistency"
+    enabled: true
+    weight: 0.15
+    config:
+      checkContradictions: true
+      validateInferences: true
+
+output:
+  format: "intelligence_brief"
+  sections:
+    - "executive_refactoring_summary"
+    - "code_quality_and_debt_assessment"
+    - "refactoring_opportunity_landscape"
+    - "strategic_refactoring_approaches"
+    - "risk_assessment_and_mitigation"
+    - "testing_and_validation_strategy"
+    - "implementation_roadmap_options"
+    - "team_coordination_considerations"
+    - "refactoring_debate_framework"
+  densityTarget: 4200
+  optimizeFor: "swarm_consumption"
+  includeDebateTopics: true
+  includeMetrics: true
+  includeCitations: true
+
+performance:
+  cacheResults: true
+  cacheTtlMinutes: 60
+  maxMemoryMb: 1024
+  cpuIntensive: true

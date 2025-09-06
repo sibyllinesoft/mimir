@@ -8,9 +8,25 @@
 import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
 import { 
   atomicWriteText, 
+  atomicWriteBytes,
+  atomicWriteJson,
   computeFileHash,
+  computeContentHash,
+  readTextWithHash,
+  readBytesWithHash,
+  safeCopy,
+  safeMove,
+  cleanupDirectory,
+  getDirectorySize,
+  createTempDirectory,
+  extractFileSpan,
+  validateFileIntegrity,
+  getFileMetadata,
+  getIndexDirectory,
+  ensureDirectory,
   ensureDir,
   pathExists,
+  fileExists,
   isFile,
   isDirectory,
   getFileSize,
@@ -285,6 +301,389 @@ describe('Filesystem Utilities', () => {
       expect(sanitizePath('path/with/../../traversal')).toBe('traversal');
       expect(sanitizePath('../../../root')).toBe('root');
       expect(sanitizePath('normal/../../path')).toBe('path');
+    });
+  });
+
+  describe('Content Hash Functions', () => {
+    it('should compute content hash from string', () => {
+      const content = 'Test content for hashing';
+      const hash = computeContentHash(content);
+      const expectedHash = createHash('sha256').update(content, 'utf8').digest('hex');
+      
+      expect(hash).toBe(expectedHash);
+    });
+
+    it('should compute content hash from buffer', () => {
+      const content = Buffer.from([0x01, 0x02, 0x03, 0x04]);
+      const hash = computeContentHash(content);
+      const expectedHash = createHash('sha256').update(content).digest('hex');
+      
+      expect(hash).toBe(expectedHash);
+    });
+
+    it('should use custom algorithm for content hash', () => {
+      const content = 'Test content';
+      const hash = computeContentHash(content, 'md5');
+      const expectedHash = createHash('md5').update(content, 'utf8').digest('hex');
+      
+      expect(hash).toBe(expectedHash);
+    });
+  });
+
+  describe('Additional Atomic Write Operations', () => {
+    it('should write bytes atomically', async () => {
+      const filePath = join(tempDir, 'bytes-test.bin');
+      const content = Buffer.from([0x48, 0x65, 0x6c, 0x6c, 0x6f]); // "Hello"
+
+      await atomicWriteBytes(filePath, content);
+
+      expect(await pathExists(filePath)).toBe(true);
+      const written = readFileSync(filePath);
+      expect(written).toEqual(content);
+    });
+
+    it('should write JSON atomically', async () => {
+      const filePath = join(tempDir, 'data.json');
+      const data = { name: 'test', value: 42, nested: { flag: true } };
+
+      await atomicWriteJson(filePath, data);
+
+      expect(await pathExists(filePath)).toBe(true);
+      const written = JSON.parse(readFileSync(filePath, 'utf-8'));
+      expect(written).toEqual(data);
+    });
+
+    it('should write JSON with custom spacing', async () => {
+      const filePath = join(tempDir, 'pretty.json');
+      const data = { key: 'value' };
+
+      await atomicWriteJson(filePath, data, 2);
+
+      expect(await pathExists(filePath)).toBe(true);
+      const content = readFileSync(filePath, 'utf-8');
+      expect(content).toContain('  "key": "value"'); // Check for pretty printing
+    });
+  });
+
+  describe('Read with Hash Operations', () => {
+    it('should read text with hash', async () => {
+      const filePath = join(tempDir, 'read-with-hash.txt');
+      const content = 'Content to read with hash verification';
+      writeFileSync(filePath, content);
+
+      const result = await readTextWithHash(filePath);
+
+      expect(result.content).toBe(content);
+      expect(result.hash).toBe(computeContentHash(content));
+    });
+
+    it('should read text with hash', async () => {
+      const filePath = join(tempDir, 'read-text-hash.txt');
+      const content = 'Content with hash for reading';
+      writeFileSync(filePath, content);
+
+      const result = await readTextWithHash(filePath);
+
+      expect(result.content).toBe(content);
+      expect(result.hash).toBe(computeContentHash(content));
+    });
+
+    it('should read bytes with hash', async () => {
+      const filePath = join(tempDir, 'read-bytes.bin');
+      const content = Buffer.from([0x10, 0x20, 0x30, 0x40]);
+      writeFileSync(filePath, content);
+
+      const result = await readBytesWithHash(filePath);
+
+      expect(result.content).toEqual(content);
+      expect(result.hash).toBe(computeContentHash(content));
+    });
+  });
+
+  describe('File Copy and Move Operations', () => {
+    it('should copy file safely', async () => {
+      const srcPath = join(tempDir, 'source.txt');
+      const destPath = join(tempDir, 'dest.txt');
+      const content = 'Content to copy';
+      writeFileSync(srcPath, content);
+
+      await safeCopy(srcPath, destPath);
+
+      expect(await pathExists(destPath)).toBe(true);
+      expect(readFileSync(destPath, 'utf-8')).toBe(content);
+      expect(await pathExists(srcPath)).toBe(true); // Source should still exist
+    });
+
+    it('should move file safely', async () => {
+      const srcPath = join(tempDir, 'source-move.txt');
+      const destPath = join(tempDir, 'dest-move.txt');
+      const content = 'Content to move';
+      writeFileSync(srcPath, content);
+
+      await safeMove(srcPath, destPath);
+
+      expect(await pathExists(destPath)).toBe(true);
+      expect(readFileSync(destPath, 'utf-8')).toBe(content);
+      expect(await pathExists(srcPath)).toBe(false); // Source should be removed
+    });
+
+    it('should create destination directory for copy', async () => {
+      const srcPath = join(tempDir, 'source-nested.txt');
+      const destPath = join(tempDir, 'nested', 'directory', 'dest.txt');
+      const content = 'Content for nested copy';
+      writeFileSync(srcPath, content);
+
+      await safeCopy(srcPath, destPath);
+
+      expect(await pathExists(destPath)).toBe(true);
+      expect(readFileSync(destPath, 'utf-8')).toBe(content);
+    });
+
+    it('should create destination directory for move', async () => {
+      const srcPath = join(tempDir, 'source-nested-move.txt');
+      const destPath = join(tempDir, 'nested', 'move', 'dest.txt');
+      const content = 'Content for nested move';
+      writeFileSync(srcPath, content);
+
+      await safeMove(srcPath, destPath);
+
+      expect(await pathExists(destPath)).toBe(true);
+      expect(readFileSync(destPath, 'utf-8')).toBe(content);
+      expect(await pathExists(srcPath)).toBe(false);
+    });
+  });
+
+  describe('Directory Cleanup Operations', () => {
+    it('should cleanup directory removing all files by default', async () => {
+      const cleanupDir = join(tempDir, 'cleanup-test');
+      mkdirSync(cleanupDir, { recursive: true });
+      
+      const file1 = join(cleanupDir, 'file1.txt');
+      const file2 = join(cleanupDir, 'file2.txt');
+      writeFileSync(file1, 'content 1');
+      writeFileSync(file2, 'content 2');
+
+      await cleanupDirectory(cleanupDir);
+
+      expect(await pathExists(file1)).toBe(false);
+      expect(await pathExists(file2)).toBe(false);
+    });
+
+    it('should cleanup directory with pattern exclusions', async () => {
+      const cleanupDir = join(tempDir, 'cleanup-pattern');
+      mkdirSync(cleanupDir, { recursive: true });
+      
+      const logFile = join(cleanupDir, 'keep.log');
+      const txtFile = join(cleanupDir, 'delete.txt');
+      writeFileSync(logFile, 'keep this log file');
+      writeFileSync(txtFile, 'delete this text file');
+
+      await cleanupDirectory(cleanupDir, ['*.log']);
+
+      expect(await pathExists(logFile)).toBe(true); // Should be kept
+      expect(await pathExists(txtFile)).toBe(false); // Should be deleted
+    });
+
+    it('should cleanup directory with multiple patterns', async () => {
+      const cleanupDir = join(tempDir, 'cleanup-multi');
+      mkdirSync(cleanupDir, { recursive: true });
+      
+      const logFile = join(cleanupDir, 'app.log');
+      const configFile = join(cleanupDir, 'config.json');
+      const tempFile = join(cleanupDir, 'temp.tmp');
+      writeFileSync(logFile, 'log content');
+      writeFileSync(configFile, 'config content');
+      writeFileSync(tempFile, 'temp content');
+
+      await cleanupDirectory(cleanupDir, ['*.log', '*.json']);
+
+      expect(await pathExists(logFile)).toBe(true); // Should be kept
+      expect(await pathExists(configFile)).toBe(true); // Should be kept
+      expect(await pathExists(tempFile)).toBe(false); // Should be deleted
+    });
+
+    it('should calculate directory size', async () => {
+      const sizeDir = join(tempDir, 'size-test');
+      mkdirSync(sizeDir, { recursive: true });
+      
+      const file1 = join(sizeDir, 'file1.txt');
+      const file2 = join(sizeDir, 'file2.txt');
+      writeFileSync(file1, 'x'.repeat(100));
+      writeFileSync(file2, 'y'.repeat(200));
+
+      const size = await getDirectorySize(sizeDir);
+
+      expect(size).toBe(300); // 100 + 200 bytes
+    });
+  });
+
+  describe('Temporary Directory Operations', () => {
+    it('should create temporary directory', async () => {
+      const tempResult = await createTempDirectory();
+
+      expect(await pathExists(tempResult)).toBe(true);
+      expect(await isDirectory(tempResult)).toBe(true);
+      
+      // Cleanup
+      rmSync(tempResult, { recursive: true });
+    });
+
+    it('should create temporary directory with prefix', async () => {
+      const prefix = 'test-prefix';
+      const tempResult = await createTempDirectory(prefix);
+
+      expect(await pathExists(tempResult)).toBe(true);
+      expect(tempResult).toContain(prefix);
+      
+      // Cleanup
+      rmSync(tempResult, { recursive: true });
+    });
+  });
+
+  describe('File Content Extraction', () => {
+    it('should extract file span with byte ranges', async () => {
+      const filePath = join(tempDir, 'extract-test.txt');
+      const content = 'line 1\nline 2\nline 3\nline 4\nline 5';
+      writeFileSync(filePath, content);
+
+      // Extract bytes 7-13 ('line 2') with 1 line context
+      const result = await extractFileSpan(filePath, 7, 13, 1);
+
+      expect(result.span).toBe('line 2');
+      expect(result.pre).toContain('line 1');
+      expect(result.post).toContain('line 3');
+    });
+
+    it('should extract file span without context', async () => {
+      const filePath = join(tempDir, 'extract-no-context.txt');
+      const content = 'hello world test';
+      writeFileSync(filePath, content);
+
+      // Extract bytes 6-11 ('world') with no context
+      const result = await extractFileSpan(filePath, 6, 11, 0);
+
+      expect(result.span).toBe('world');
+      expect(result.pre).toBe('');
+      expect(result.post).toBe('');
+    });
+
+    it('should handle file span at beginning', async () => {
+      const filePath = join(tempDir, 'extract-beginning.txt');
+      const content = 'start\nmiddle\nend';
+      writeFileSync(filePath, content);
+
+      // Extract bytes 0-5 ('start') with context
+      const result = await extractFileSpan(filePath, 0, 5, 1);
+
+      expect(result.span).toBe('start');
+      expect(result.pre).toBe('');
+      expect(result.post).toContain('middle');
+    });
+
+    it('should handle file span at end', async () => {
+      const filePath = join(tempDir, 'extract-end.txt');
+      const content = 'start\nmiddle\nend';
+      writeFileSync(filePath, content);
+
+      // Extract 'end' (last 3 bytes) with context  
+      const result = await extractFileSpan(filePath, content.length - 3, content.length, 1);
+
+      expect(result.span).toBe('end');
+      expect(result.pre).toContain('middle');
+      expect(result.post).toBe('');
+    });
+  });
+
+  describe('File Integrity and Metadata', () => {
+    it('should validate file integrity', async () => {
+      const filePath = join(tempDir, 'integrity.txt');
+      const content = 'Content for integrity check';
+      writeFileSync(filePath, content);
+      const hash = computeContentHash(content);
+
+      const isValid = await validateFileIntegrity(filePath, hash);
+
+      expect(isValid).toBe(true);
+    });
+
+    it('should detect corrupted file', async () => {
+      const filePath = join(tempDir, 'corrupted.txt');
+      writeFileSync(filePath, 'Original content');
+      const originalHash = computeContentHash('Original content');
+      
+      // Corrupt the file
+      writeFileSync(filePath, 'Corrupted content');
+
+      const isValid = await validateFileIntegrity(filePath, originalHash);
+
+      expect(isValid).toBe(false);
+    });
+
+    it('should get file metadata', async () => {
+      const filePath = join(tempDir, 'metadata.txt');
+      const content = 'Metadata test content';
+      writeFileSync(filePath, content);
+
+      const metadata = await getFileMetadata(filePath);
+
+      expect(metadata.path).toBe(resolve(filePath));
+      expect(metadata.size).toBe(content.length);
+      expect(metadata.hash).toBe(computeContentHash(content));
+      expect(typeof metadata.created).toBe('number');
+      expect(typeof metadata.modified).toBe('number');
+      expect(metadata.created).toBeGreaterThan(0);
+      expect(metadata.modified).toBeGreaterThan(0);
+      expect(metadata.isFile).toBe(true);
+      expect(metadata.isDir).toBe(false);
+      expect(metadata.exists).toBe(true);
+    });
+  });
+
+  describe('Directory Management Extensions', () => {
+    it('should create index directory', async () => {
+      const baseDir = tempDir;
+      const indexId = 'test-index-123';
+      
+      const result = await getIndexDirectory(baseDir, indexId);
+      
+      expect(result).toBe(resolve(join(baseDir, indexId)));
+      expect(await pathExists(result)).toBe(true);
+      expect(await isDirectory(result)).toBe(true);
+    });
+
+    it('should use ensureDirectory directly', async () => {
+      const testDir = join(tempDir, 'ensure-direct');
+      
+      const result = await ensureDirectory(testDir);
+      
+      expect(result).toBe(resolve(testDir));
+      expect(await pathExists(testDir)).toBe(true);
+    });
+  });
+
+  describe('File Existence Checks', () => {
+    it('should check file existence with fileExists', async () => {
+      const existingFile = join(tempDir, 'exists-check.txt');
+      const nonExistentFile = join(tempDir, 'not-exists.txt');
+      writeFileSync(existingFile, 'exists');
+
+      expect(await fileExists(existingFile)).toBe(true);
+      expect(await fileExists(nonExistentFile)).toBe(false);
+    });
+
+    it('should distinguish pathExists vs fileExists', async () => {
+      const filePath = join(tempDir, 'file-vs-path.txt');
+      const dirPath = join(tempDir, 'dir-vs-path');
+      writeFileSync(filePath, 'content');
+      mkdirSync(dirPath);
+
+      // Both should work for pathExists
+      expect(await pathExists(filePath)).toBe(true);
+      expect(await pathExists(dirPath)).toBe(true);
+      
+      // fileExists should work the same way
+      expect(await fileExists(filePath)).toBe(true);
+      expect(await fileExists(dirPath)).toBe(true);
     });
   });
 

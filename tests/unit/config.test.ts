@@ -5,7 +5,7 @@
  * and configuration validation functions.
  */
 
-import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, it, beforeEach, afterEach, mock } from 'bun:test';
 import { 
   loadConfig,
   loadConfigFromFile,
@@ -31,6 +31,9 @@ describe('Configuration Management', () => {
   let tempConfigFile: string;
 
   beforeEach(() => {
+    // Reset any module mocks from other test files
+    mock.restore();
+    
     // Reset environment
     process.env = { ...originalEnv };
     

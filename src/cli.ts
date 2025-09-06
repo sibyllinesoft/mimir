@@ -8,7 +8,7 @@
 import { Command } from 'commander';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
-import { loadConfig, validateConfig } from '@/config/config';
+import { loadConfig, loadConfigFromFile, validateConfig } from '@/config/config';
 import { createLogger, setupLogging } from '@/utils/logger';
 import { FileDiscovery } from '@/pipeline/discovery';
 import { SymbolAnalysis } from '@/pipeline/symbols';
@@ -17,6 +17,22 @@ import type { PipelineContext } from '@/types';
 
 const program = new Command();
 const logger = createLogger('mimir.cli');
+
+// Helper function to load config based on global options
+function getConfig(): any {
+  const globalOpts = program.opts();
+  
+  try {
+    if (globalOpts.config) {
+      return loadConfigFromFile(globalOpts.config);
+    } else {
+      return loadConfig();
+    }
+  } catch (error) {
+    console.error(`Error loading configuration: ${error.message}`);
+    process.exit(1);
+  }
+}
 
 program
   .name('mimir')
@@ -58,7 +74,7 @@ program
     try {
       logger.info('Starting repository indexing', { path: repoPath, options });
       
-      const config = loadConfig();
+      const config = getConfig();
       const warnings = validateConfig(config);
       
       if (warnings.length > 0) {
@@ -169,7 +185,7 @@ program
     try {
       logger.info('Starting search', { query, options });
       
-      const config = loadConfig();
+      const config = getConfig();
       
       if (!config.lens.enabled) {
         logger.error('Search requires Lens integration to be enabled');
@@ -227,7 +243,7 @@ program
   .argument('[path]', 'Repository path or index ID')
   .action(async (pathOrId) => {
     try {
-      const config = loadConfig();
+      const config = getConfig();
       
       if (!config.lens.enabled) {
         logger.error('Status requires Lens integration to be enabled');
@@ -282,6 +298,9 @@ program
   .action(async (repoPath) => {
     try {
       logger.info('Validating repository', { path: repoPath });
+      
+      // Load config to trigger validation of config file
+      const config = getConfig();
       
       const resolvedPath = resolve(repoPath);
       if (!existsSync(resolvedPath)) {
